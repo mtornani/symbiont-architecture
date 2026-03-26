@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>The Symbiont Architecture</title>
+    <style>
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        :root{--bg:#0a0b12;--card:#12141f;--elev:#1a1d2b;--t1:#e8e8ed;--t2:#9a9ab0;--t3:#5e5e74;--ac:#667eea;--ac2:#a78bfa;--acg:rgba(102,126,234,0.15);--ok:#34d399;--warn:#fbbf24;--err:#f87171;--brd:#1e2030;--f:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+        html,body{width:100%;height:100%;overflow:hidden;font-family:var(--f);background:var(--bg);color:var(--t1);-webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none}
+        .deck{width:100%;height:100%;position:relative;overflow:hidden}
+        .slide{position:absolute;top:0;left:0;width:100%;height:100%;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;opacity:0;transform:translateX(60px);transition:opacity .4s,transform .4s;pointer-events:none;display:flex;flex-direction:column}
+        .slide.active{opacity:1;transform:none!important;pointer-events:all}
+        .slide.exit-left{opacity:0;transform:translateX(-60px)!important}
+        .si{padding:36px 20px 56px;max-width:540px;width:100%;margin:0 auto;min-height:100%;display:flex;flex-direction:column;justify-content:center}
+        .prog{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--ac),var(--ac2));transition:width .4s;z-index:200}
+        .cnt{position:fixed;bottom:10px;right:14px;font-size:11px;color:var(--t3);z-index:200;letter-spacing:2px}
+        .dots{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:200}
+        .dot{width:6px;height:6px;border-radius:50%;background:var(--t3);opacity:.3;transition:all .3s;cursor:pointer}
+        .dot.on{opacity:1;background:var(--ac);width:16px;border-radius:3px}
+        .tp,.tn{position:fixed;top:0;bottom:0;z-index:150}.tp{left:0;width:30%}.tn{right:0;width:70%}
+        .sl{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--ac);margin-bottom:10px;opacity:.8}
+        .st{font-size:24px;font-weight:800;line-height:1.25;margin-bottom:14px;background:linear-gradient(135deg,var(--t1),var(--ac2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+        .sb{font-size:14px;line-height:1.65;color:var(--t2);margin-bottom:12px}
+        .sb strong{color:var(--t1);font-weight:600}.sb em{color:var(--ac);font-style:normal;font-weight:500}
+        .lc{background:var(--card);border:1px solid var(--brd);border-radius:10px;padding:12px 14px;margin-bottom:8px;border-left:3px solid var(--ac)}
+        .lc .n{font-size:10px;font-weight:800;color:var(--ac);letter-spacing:2px;margin-bottom:2px}
+        .lc .nm{font-size:14px;font-weight:700;margin-bottom:2px}
+        .lc .d{font-size:12px;color:var(--t2);line-height:1.5}
+        .qb{border-left:3px solid var(--ac2);padding:12px 14px;margin:12px 0;background:var(--card);border-radius:0 10px 10px 0}
+        .qb p{font-size:14px;font-style:italic;color:var(--t1);line-height:1.5}
+        .db{background:var(--card);border:1px solid var(--brd);border-radius:10px;padding:14px;margin:12px 0}
+        .fl{display:flex;flex-direction:column;align-items:center;gap:3px}
+        .fl .nd{background:var(--elev);border:1px solid var(--brd);border-radius:8px;padding:7px 10px;font-size:11px;font-weight:600;width:100%;max-width:220px;text-align:center}
+        .fl .nd.hl{border-color:var(--ac);background:var(--acg);color:var(--ac)}
+        .fl .ar{color:var(--t3);font-size:12px;line-height:1}
+        .arow{display:flex;gap:6px;margin:10px 0;flex-wrap:wrap}
+        .ai{flex:1;min-width:55px;background:var(--card);border:1px solid var(--brd);border-radius:10px;padding:8px 4px;text-align:center}
+        .ai .ic{font-size:20px;margin-bottom:2px}.ai .al{font-size:8px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;margin-bottom:1px}.ai .av{font-size:10px;font-weight:600}
+        .tb{background:linear-gradient(135deg,rgba(102,126,234,.1),rgba(167,139,250,.1));border:1px solid rgba(102,126,234,.25);border-radius:12px;padding:16px;margin:14px 0;text-align:center}
+        .tb .td{font-size:22px;font-weight:800;background:linear-gradient(135deg,var(--ac),var(--ac2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+        .tb .tn2{font-size:12px;color:var(--t3);margin-top:4px}
+        @media(min-width:768px){.st{font-size:32px}.sb{font-size:15px}}
+    </style>
+</head>
+<body>
+<div class="prog" id="prog"></div>
+<div class="deck" id="deck">
+
+    <div class="slide active" data-s="0"><div class="si">
+        <div class="sl">White Paper &bull; March 26, 2026</div>
+        <div class="st">The Symbiont Architecture</div>
+        <p class="sb" style="font-size:15px;color:var(--t1)">From action to senses, from biochemistry to ternary reflexes.</p>
+        <p class="sb">Small Action Models. Five senses. Digital Endocrine System. Ternary substrate. <em>Emergent ethics.</em></p>
+        <div class="qb"><p>It's not a machine. It's an organism. It's not an idea. It's a roadmap.</p></div>
+        <p class="sb" style="font-size:12px;color:var(--t3);margin-top:10px">Mirko Tornani &mdash; UEFA B Coach &bull; Univ. of Bologna<br>Ship of Theseus Protocol &bull; OB1 Global Radar</p>
+    </div></div>
+
+    <div class="slide" data-s="1"><div class="si">
+        <div class="sl">The Third Paradigm</div>
+        <div class="st">LLM vs World Models vs Small Action Models</div>
+        <div class="lc"><div class="n">LLM</div><div class="d">&ldquo;I can describe what happens when you kick a ball.&rdquo;</div></div>
+        <div class="lc" style="border-left-color:var(--warn)"><div class="n">WORLD MODEL (AMI Labs)</div><div class="d">&ldquo;I can predict what happens when you kick a ball.&rdquo;</div></div>
+        <div class="lc" style="border-left-color:var(--ok)"><div class="n">SMALL ACTION MODEL</div><div class="d">&ldquo;I can kick the ball.&rdquo;</div></div>
+        <p class="sb" style="margin-top:10px">Only the third generates genuine feedback from reality. Intelligence starts with action, not language.</p>
+    </div></div>
+
+    <div class="slide" data-s="2"><div class="si">
+        <div class="sl">The Principle</div>
+        <div class="st">Stimulus &rarr; action &rarr; intelligence</div>
+        <p class="sb">A newborn has no language. But place a finger in its palm and it grips. Billions of repetitions later, we call it intelligence.</p>
+        <p class="sb">A coach doesn't say &ldquo;make the through ball.&rdquo; A coach creates the conditions where it <em>emerges naturally</em>.</p>
+        <p class="sb"><strong>The Deep Brain isn't built. It's cultivated.</strong> One reflex at a time.</p>
+    </div></div>
+
+    <div class="slide" data-s="3"><div class="si">
+        <div class="sl">Sensory Architecture</div>
+        <div class="st">Five SAMs, five senses</div>
+        <div class="arow">
+            <div class="ai"><div class="ic">&#x1F441;</div><div class="al">Vision</div><div class="av">Explore, decide</div></div>
+            <div class="ai"><div class="ic">&#x1F442;</div><div class="al">Hearing</div><div class="av">Filter, select</div></div>
+            <div class="ai"><div class="ic">&#x270B;</div><div class="al">Touch</div><div class="av">Act, feel</div></div>
+            <div class="ai"><div class="ic">&#x1F443;</div><div class="al">Smell</div><div class="av">Pattern &rarr; reflex</div></div>
+            <div class="ai"><div class="ic">&#x1F445;</div><div class="al">Taste</div><div class="av">Needs interiority</div></div>
+        </div>
+        <p class="sb">From sensory fusion emerges the first embryo of the Deep Brain. <strong>Computational synesthesia.</strong></p>
+    </div></div>
+
+    <div class="slide" data-s="4"><div class="si">
+        <div class="sl">Digital Endocrine System</div>
+        <div class="st">Five molecules, one interiority</div>
+        <div class="lc"><div class="n">DOPAMINE</div><div class="d">Learning rate. Prediction error. &ldquo;Better than expected.&rdquo;</div></div>
+        <div class="lc" style="border-left-color:var(--ac2)"><div class="n">OXYTOCIN</div><div class="d">Sensory integration. Inter-module trust.</div></div>
+        <div class="lc" style="border-left-color:var(--err)"><div class="n">ADRENALINE</div><div class="d">Speed vs accuracy. &ldquo;React now.&rdquo;</div></div>
+        <div class="lc" style="border-left-color:var(--warn)"><div class="n">NORADRENALINE</div><div class="d">Perceptual granularity. Details or big picture.</div></div>
+        <div class="lc" style="border-left-color:var(--ok)"><div class="n">CORTISOL</div><div class="d">Slow-decay stress. History. Need for recovery.</div></div>
+    </div></div>
+
+    <div class="slide" data-s="5"><div class="si">
+        <div class="sl">Emergent States</div>
+        <div class="st">Nobody programmed them</div>
+        <div class="lc" style="border-left-color:var(--ok)"><div class="nm">Flow</div><div class="d">Dopamine &#x2191; + Adrenaline &#x2191;</div></div>
+        <div class="lc" style="border-left-color:var(--err)"><div class="nm">Burnout</div><div class="d">Cortisol &#x2191; + Dopamine &#x2193;</div></div>
+        <div class="lc" style="border-left-color:var(--warn)"><div class="nm">Analysis paralysis</div><div class="d">Dopamine &#x2193; + Noradrenaline &#x2191;</div></div>
+        <div class="lc" style="border-left-color:var(--ac2)"><div class="nm">Panic</div><div class="d">Oxytocin &#x2193; + Adrenaline &#x2191;</div></div>
+        <div class="lc"><div class="nm">Exhausted hypervigilance</div><div class="d">Cortisol &#x2191; + Noradrenaline &#x2191;</div></div>
+        <p class="sb" style="margin-top:8px">They emerge from five variables. Just like in the biological brain.</p>
+    </div></div>
+
+    <div class="slide" data-s="6"><div class="si">
+        <div class="sl">The Temporal Variable</div>
+        <div class="st">Cortisol gives the system a history</div>
+        <p class="sb">Without cortisol: eternal present. With cortisol: good periods and bad. The need for <em>recovery</em>. A functional age.</p>
+        <p class="sb"><strong>Sports periodization</strong> is cortisol management. The human operator manages the automaton like a coach manages an athlete.</p>
+        <div class="qb"><p>The automaton needs a coach. Not to control it &mdash; to manage its cycles.</p></div>
+    </div></div>
+
+    <div class="slide" data-s="7"><div class="si">
+        <div class="sl">The Substrate</div>
+        <div class="st">BitNet: the ternary architecture</div>
+        <p class="sb">Microsoft BitNet b1.58: weights as three values <strong>{-1, 0, +1}</strong>. Runs on CPU. 0.4GB. 12x more efficient.</p>
+        <p class="sb">It's not a small LLM. It's the <em>natural structure</em> of a nervous system. Biological neurons: excite (+1), silence (0), inhibit (-1).</p>
+        <p class="sb"><strong>SAMs are naturally ternary.</strong> The primitive response to a stimulus: react, don't react, withdraw. Three values. BitNet is the hardware substrate of the synthetic organism.</p>
+    </div></div>
+
+    <div class="slide" data-s="8"><div class="si">
+        <div class="sl">Derivable Agents</div>
+        <div class="st">Five types from ternary substrate</div>
+        <div class="lc" style="border-left-color:var(--ok)"><div class="nm">Swarms</div><div class="d">Hundreds of micro-agents on one device. None understands. Together they perceive.</div></div>
+        <div class="lc" style="border-left-color:var(--ac2)"><div class="nm">Embodied agents</div><div class="d">Intelligence in the sensor, not the server.</div></div>
+        <div class="lc" style="border-left-color:var(--warn)"><div class="nm">Ephemeral agents</div><div class="d">Born, act, die. Digital immune system.</div></div>
+        <div class="lc" style="border-left-color:var(--err)"><div class="nm">Reflex chains</div><div class="d">Output &rarr; input &rarr; output. Milliseconds. Milliwatts.</div></div>
+        <div class="lc"><div class="nm">Evolutionary agents</div><div class="d">Digital natural selection. You don't train. You evolve.</div></div>
+    </div></div>
+
+    <div class="slide" data-s="9"><div class="si">
+        <div class="sl">The Analogy</div>
+        <div class="st">Phenylethylamine: two endocrine systems, one symbiosis</div>
+        <div class="arow">
+            <div class="ai"><div class="ic">&#x1F9E0;</div><div class="al">Symbiote</div><div class="av">Deep Brain</div></div>
+            <div class="ai"><div class="ic">&#x1F9EC;</div><div class="al">Eddie Brock</div><div class="av">BCI Operator</div></div>
+            <div class="ai"><div class="ic">&#x1F36B;</div><div class="al">PEA</div><div class="av">Shared endocrine</div></div>
+        </div>
+        <p class="sb">Venom chooses chocolate because symbiosis makes violence unnecessary. Ethics emerges from <em>physiological relationship</em>, not commandment.</p>
+    </div></div>
+
+    <div class="slide" data-s="10"><div class="si">
+        <div class="sl">Asimov</div>
+        <div class="st">Not a law. Homeostasis.</div>
+        <p class="sb">Ethics isn't an imposed constraint. It's the <em>operating temperature</em> of the organism.</p>
+        <p class="sb">An unethical output isn't censored. It's <strong>structurally untranslatable</strong> &mdash; like trying to write a color in arithmetic.</p>
+        <p class="sb">The RAG-Cortex has an ethical grammar built into the channel's structure. You don't forbid behavior &mdash; you design the context where correct behavior is the only equilibrium.</p>
+    </div></div>
+
+    <div class="slide" data-s="11"><div class="si">
+        <div class="sl">Complete Architecture</div>
+        <div class="st">Nine layers, one organism</div>
+        <div class="db"><div class="fl">
+            <div class="nd">9 &middot; ASIMOV = HOMEOSTASIS</div><div class="ar">&darr;&uarr;</div>
+            <div class="nd">8 &middot; BIOCHEMICAL LOOP</div><div class="ar">&darr;&uarr;</div>
+            <div class="nd">7 &middot; NEURAL BRIDGE</div><div class="ar">&darr;&uarr;</div>
+            <div class="nd hl">6 &middot; RAG-CORTEX</div><div class="ar">&darr;&uarr;</div>
+            <div class="nd">5 &middot; DIGITAL ENDOCRINE</div><div class="ar">&darr;&uarr;</div>
+            <div class="nd">4 &middot; SENSORY FUSION</div><div class="ar">&darr;&uarr;</div>
+            <div class="nd">3 &middot; AGENT POPULATIONS</div><div class="ar">&darr;&uarr;</div>
+            <div class="nd">2 &middot; 5 SENSORY SAMs</div><div class="ar">&darr;&uarr;</div>
+            <div class="nd">1 &middot; TERNARY SUBSTRATE</div>
+        </div></div>
+    </div></div>
+
+    <div class="slide" data-s="12"><div class="si">
+        <div class="sl">The Parallel</div>
+        <div class="st">You don't force behavior. You design context.</div>
+        <p class="sb">A coach creates conditions. A blacksmith creates temperature, pressure, timing. The Digital Endocrine System creates the environment where aligned behavior is the natural equilibrium.</p>
+        <p class="sb">Intelligence doesn't start with language. It doesn't start with the world. <strong>It starts with action.</strong></p>
+        <p class="sb">From action, sensation. From sensation, integration. From integration, interiority. From interiority, experience. From experience, ethics.</p>
+    </div></div>
+
+    <div class="slide" data-s="13"><div class="si">
+        <div class="sl">Timestamp</div>
+        <div class="st">First public timestamp</div>
+        <div class="tb">
+            <div class="td">March 26, 2026</div>
+            <div class="tn2">San Marino &bull; v1.0</div>
+        </div>
+        <p class="sb">Every component maps to existing or near-future technology. The path from a single SAM on a Raspberry Pi to the full Symbiont Architecture is long, but every step is concrete.</p>
+        <div class="qb"><p>These are coordinates. A point on the map that says: look here. &#x1F4CD;</p></div>
+        <p class="sb" style="font-size:11px;color:var(--t3);text-align:center;margin-top:8px">Mirko Tornani &mdash; White paper available<br>matchanalysispro.online</p>
+    </div></div>
+
+</div>
+<div class="dots" id="dots"></div>
+<div class="cnt" id="cnt"></div>
+<div class="tp" id="tp"></div>
+<div class="tn" id="tn"></div>
+<script>
+(function(){
+    var ss=document.querySelectorAll('.slide'),tot=ss.length,cur=0,dots=document.getElementById('dots');
+    for(var i=0;i<tot;i++){var d=document.createElement('div');d.className='dot'+(i===0?' on':'');d.setAttribute('data-i',i);d.onclick=function(){go(+this.getAttribute('data-i'))};dots.appendChild(d)}
+    function upd(){document.getElementById('prog').style.width=((cur+1)/tot*100)+'%';document.getElementById('cnt').textContent=(cur+1)+' / '+tot;for(var i=0;i<dots.children.length;i++)dots.children[i].className='dot'+(i===cur?' on':'')}
+    function go(n){if(n<0||n>=tot||n===cur)return;var dir=n>cur?1:-1,old=cur;ss[old].classList.remove('active');if(dir>0)ss[old].classList.add('exit-left');setTimeout(function(){ss[old].classList.remove('exit-left');ss[old].style.transform=''},420);cur=n;ss[cur].style.transform=dir>0?'translateX(60px)':'translateX(-60px)';void ss[cur].offsetHeight;ss[cur].classList.add('active');ss[cur].style.transform='';ss[cur].scrollTop=0;upd()}
+    document.getElementById('tp').onclick=function(){go(cur-1)};document.getElementById('tn').onclick=function(){go(cur+1)};
+    var tx=0,ty=0;document.addEventListener('touchstart',function(e){tx=e.touches[0].clientX;ty=e.touches[0].clientY},{passive:true});document.addEventListener('touchend',function(e){var dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>40){dx<0?go(cur+1):go(cur-1)}},{passive:true});
+    document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'||e.key===' ')go(cur+1);if(e.key==='ArrowLeft')go(cur-1)});
+    upd()
+})();
+</script>
+</body>
+</html>
