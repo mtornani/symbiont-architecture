@@ -1,0 +1,22 @@
+{
+  "Test 1 (Backward Compatibility)": {
+    "pass": true,
+    "value": 0.241
+  },
+  "Test 2 (Distributed Inhibition)": {
+    "pass": true,
+    "value": 0.7014925373134329
+  },
+  "Test 3 (EHD at Scale)": {
+    "pass": true,
+    "value": 0.6647345806430833
+  },
+  "Test 4 (Neuron Differentiation)": {
+    "pass": true,
+    "value": 0.06588057376799325
+  },
+  "Test 5 (Oxytocin Tracking)": {
+    "pass": true,
+    "value": 0.4657470505701586
+  }
+}
