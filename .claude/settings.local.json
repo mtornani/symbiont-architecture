@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python simulation.py)",
+      "Bash(ls /c/Python*/python.exe)",
+      "Read(//c/Users/Mirko/AppData/Local/Programs/Python/**)",
+      "Bash(py -3 --version)",
+      "Bash(python3 simulation.py)",
+      "Bash(cmd.exe /c \"cd /d D:\\\\AI\\\\symbiont-architecture\\\\sam-neuron-v0 && python simulation.py\")",
+      "Bash(cmd.exe /c \"python --version\")",
+      "Bash(powershell.exe -Command \"python --version\")",
+      "Bash(powershell.exe -Command \"py -3 --version\")",
+      "Bash(powershell.exe -Command \"Get-Command python* | Format-Table Name,Source\")",
+      "Bash(powershell.exe -Command \"cd ''D:\\\\AI\\\\symbiont-architecture\\\\sam-neuron-v0''; py -3 simulation.py\")"
+    ]
+  }
+}
