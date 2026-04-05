@@ -1,0 +1,44 @@
+{
+  "Test 1 (Backward Compatibility)": {
+    "pass": true,
+    "value": 1.0
+  },
+  "Test 2 (Ternary Constraint)": {
+    "pass": true,
+    "value": 1.0
+  },
+  "Test 3 (STM Decay/Consolidation)": {
+    "pass": true,
+    "value": 0.0,
+    "max_allowed": 16.0
+  },
+  "Test 4 (Consolidation Occurred)": {
+    "pass": true,
+    "value": 3.0
+  },
+  "Test 5 (Cortisol Blocks Consolidation)": {
+    "pass": true,
+    "rest2_post_crisis": 0,
+    "rest3_post_recovery": 0,
+    "rest4_deep_sleep": 3,
+    "value": 3.0
+  },
+  "Test 6 (Endocrine Gating)": {
+    "pass": true,
+    "crisis_plasticity": 0.011987195082626023,
+    "abundance_plasticity": 0.7080860365074401,
+    "value": 59.070202130415346
+  },
+  "Test 7 (LTM Persistence)": {
+    "pass": true,
+    "ltm_after_rest3": 0,
+    "ltm_before_rest4": 0,
+    "value": 0.0
+  },
+  "Test 8 (Sleep Architecture)": {
+    "pass": true,
+    "mean_rest_melatonin": 0.6219047892123346,
+    "mean_rest_cortisol": 0.2241814079320376,
+    "value": 0.6219047892123346
+  }
+}
