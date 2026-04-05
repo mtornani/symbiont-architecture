@@ -70,7 +70,7 @@ UEFA B Licensed Coach | Sports Science, University of Bologna
 U14 National Team Coach, FSGC (San Marino)
 Creator of [Ship of Theseus Protocol](https://matchanalysispro.online/theseus/) | [OB1 Global Radar](https://matchanalysispro.online)
 
-📧 [LinkedIn](https://linkedin.com/in/mirko-tornani)
+📧 [LinkedIn](https://www.linkedin.com/in/mirkotornani/)
 
 ---
 

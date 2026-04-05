@@ -118,7 +118,7 @@ All code is open source, reproducible, and runs with Python + NumPy + Matplotlib
 **Mirko Tornani** — Sports Science (University of Bologna), UEFA B License. Independent researcher, Republic of San Marino.
 
 - [GitHub](https://github.com/mtornani)
-- [LinkedIn](https://linkedin.com/in/mirko-tornani)
+- [LinkedIn](https://www.linkedin.com/in/mirkotornani/)
 
 ## Citation
 
