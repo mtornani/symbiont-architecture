@@ -74,5 +74,11 @@ Creator of [Ship of Theseus Protocol](https://matchanalysispro.online/theseus/) 
 
 ---
 
+## Blog
+
+- [Exocentric Homeostatic Deliberation: Ethics as Homeostasis in Small Action Models](blog/ehd.md)
+
+---
+
 *v1.0 — First Public Timestamp — March 26, 2026*
 *All rights reserved.*
