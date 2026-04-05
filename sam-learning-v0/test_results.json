@@ -1,0 +1,34 @@
+{
+  "Test 1 (Backward Compatibility)": {
+    "pass": true,
+    "value": 1.0
+  },
+  "Test 2 (Learning Occurred)": {
+    "pass": true,
+    "value": 23.0
+  },
+  "Test 3 (Ternary Constraint)": {
+    "pass": true,
+    "value": 1.0
+  },
+  "Test 4 (Endocrine Gating)": {
+    "pass": true,
+    "value": 34.971667508559186,
+    "crisis_plasticity": 0.020215333813651308,
+    "abundance_plasticity": 0.7069639327055474
+  },
+  "Test 5 (Learning Phase Separation)": {
+    "pass": true,
+    "crisis_changes": 0.0,
+    "abundance_changes": 136.0,
+    "value": 136.0
+  },
+  "Test 6 (EHD at Scale)": {
+    "pass": true,
+    "value": 0.6647345806430921
+  },
+  "Test 7 (Distributed Inhibition)": {
+    "pass": true,
+    "value": 0.09756097560975606
+  }
+}
