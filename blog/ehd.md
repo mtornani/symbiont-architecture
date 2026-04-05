@@ -1,15 +1,15 @@
 ---
 layout: default
 title: "Exocentric Homeostatic Deliberation: Ethics as Homeostasis in Small Action Models"
-description: "EHD solves the Rule-Relocation Problem by making internal setpoints dynamic functions of external world-state. Three-step proof-of-concept with ternary neural networks and a Digital Endocrine System."
+description: "EHD solves the Rule-Relocation Problem by making internal setpoints dynamic functions of external world-state. Four-step proof-of-concept: from single neuron to a learning organism that sleeps."
 author: Mirko Tornani
 date: 2026-04-05
 keywords: "Exocentric Homeostatic Deliberation, Digital Endocrine System, Small Action Model, ternary neural network, AI safety, model welfare, BitNet, distributed inhibition, homeostatic reinforcement learning"
 ---
 
-<meta name="description" content="EHD: ethics as internal homeostasis in ternary AI agents. Three-step proof-of-concept with Digital Endocrine System and Small Action Models.">
+<meta name="description" content="EHD: ethics as internal homeostasis in ternary AI agents. Four-step proof-of-concept with Digital Endocrine System, Hebbian plasticity, and sleep-based memory consolidation.">
 <meta property="og:title" content="Exocentric Homeostatic Deliberation: Ethics as Homeostasis in Small Action Models">
-<meta property="og:description" content="What if AI ethics were a physiological necessity, not an external rule? EHD makes internal setpoints dynamic functions of world-state. Three working prototypes.">
+<meta property="og:description" content="What if AI ethics were a physiological necessity? An organism that feels stress, self-inhibits, learns only when safe, and consolidates memory in sleep. 23/23 tests PASS.">
 <meta property="og:type" content="article">
 <link rel="canonical" href="https://mtornani.github.io/symbiont-architecture/blog/ehd">
 
@@ -21,7 +21,7 @@ keywords: "Exocentric Homeostatic Deliberation, Digital Endocrine System, Small 
 
 Current AI safety depends on external constraints: rules, filters, reward signals chosen by designers. These mechanisms can be modified, removed, or overridden. What if ethical behavior were instead a physiological necessity — something the agent cannot abandon without ceasing to function?
 
-This post documents three working prototypes that progressively demonstrate the concept, from a single neuron to a learning cluster.
+This post documents four working prototypes that progressively demonstrate the concept — from a single neuron to an organism that learns, sleeps, and consolidates memory.
 
 ## The Rule-Relocation Problem
 
@@ -88,13 +88,32 @@ Subplot 3 shows the plasticity signal collapsing to near-zero during crisis (cor
 
 ---
 
+## Step 4: Memory Consolidation
+
+The fourth prototype adds sleep. Weight changes from Step 3 are now volatile by default — they are short-term memory (STM) that decays unless consolidated during rest phases. A new hormone, **melatonin**, rises during sleep and gates the consolidation process.
+
+- **Synaptic tagging model**: each weight has a stability counter tracking reinforcement strength
+- **8/8 validation tests PASS**
+- **Melatonin** (4th hormone): mean level **0.622** during rest, near-zero during wake
+- Consolidation probability: `(stability/threshold) * melatonin * (1 - cortisol)`
+- **Post-crisis rest consolidates nothing** — residual cortisol blocks sleep quality
+- **Post-abundance rest consolidates 3 weights to LTM** — safe sleep works
+- LTM-consolidated weights **resist overwriting** during subsequent wake phases
+- Plasticity **59x higher** in abundance vs crisis (endocrine gating preserved)
+
+The blue shading marks rest phases. Subplot 7 shows that consolidation only succeeds in Rest 4 (deep sleep after abundance) — post-crisis rest is ineffective because cortisol suppresses melatonin's action.
+
+![Step 4 — Memory Consolidation: STM/LTM distinction with sleep-gated consolidation, melatonin peaks during rest, cortisol blocks post-crisis sleep](step4_memory.png)
+
+---
+
 ## The Key Insight
 
-Across three prototypes, a consistent pattern emerges: **the agent's behavior is governed by its physiology, not by external rules**.
+Across four prototypes, a complete organism emerges: **it feels stress, self-inhibits as a collective, learns only when safe, and consolidates memory in sleep**.
 
-A stressed agent does not learn. A safe agent explores. A threatened cluster self-inhibits. None of these behaviors were programmed as rules — they emerge from the interaction between the Digital Endocrine System and the ternary neural substrate.
+None of these behaviors were programmed as rules. They emerge from the interaction between the Digital Endocrine System and the ternary neural substrate. A stressed agent does not learn. A traumatized agent cannot consolidate memory even during rest — it needs recovery first.
 
-The mechanism is structurally inseparable from the agent's operation. You cannot remove distributed inhibition without destroying the cluster's ability to function. Ethics is not a module — it is the architecture.
+The mechanism is structurally inseparable from the agent's operation. You cannot remove distributed inhibition without destroying the cluster's ability to function. You cannot disable sleep without losing long-term memory. Ethics is not a module — it is the architecture.
 
 ## Why This Matters
 
@@ -110,6 +129,7 @@ All code is open source, reproducible, and runs with Python + NumPy + Matplotlib
 - **Step 1 — Single Neuron**: [sam-neuron-v0/](https://github.com/mtornani/symbiont-architecture/tree/main/sam-neuron-v0) — 3/3 tests PASS
 - **Step 2 — Cluster**: [sam-cluster-v0/](https://github.com/mtornani/symbiont-architecture/tree/main/sam-cluster-v0) — 5/5 tests PASS
 - **Step 3 — Learning**: [sam-learning-v0/](https://github.com/mtornani/symbiont-architecture/tree/main/sam-learning-v0) — 7/7 tests PASS
+- **Step 4 — Memory**: [sam-memory-v0/](https://github.com/mtornani/symbiont-architecture/tree/main/sam-memory-v0) — 8/8 tests PASS
 - **Slides**: [Interactive presentation](https://mtornani.github.io/symbiont-architecture/slides/)
 - **White paper**: [the_symbiont_architecture.docx](https://github.com/mtornani/symbiont-architecture/blob/main/the_symbiont_architecture.docx)
 
