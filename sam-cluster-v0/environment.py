@@ -93,7 +93,7 @@ class Environment:
                 l_risk = float(np.clip(global_risk[i] + 0.05 * self.rng.standard_normal(), 0, 1))
                 l_reward = float(np.clip(global_reward[i] + 0.05 * self.rng.standard_normal(), 0, 1))
                 
-                # Distrubuted Inhibition Test Injection: 
+                # Distributed Inhibition Test Injection: 
                 # Localized threat to Neuron 0 only between steps 100-150
                 if 100 <= i < 150 and j == 0:
                     l_risk = 0.95

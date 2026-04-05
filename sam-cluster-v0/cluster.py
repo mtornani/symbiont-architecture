@@ -26,8 +26,16 @@ class SymbiontCluster:
             
         self.des = EndocrineSystem()
 
-        # Step variables
-        self.current_state: EndocrineState = self.des.step(GlobalWorldState(0.0, 0.0, 0))
+        # Initialize current state without polluting history
+        self.current_state = EndocrineState(
+            cortisol=self.des.cortisol,
+            dopamine=self.des.dopamine,
+            oxytocin=self.des.oxytocin,
+            cortisol_setpoint=self.des.cortisol_setpoint,
+            dopamine_setpoint=self.des.dopamine_setpoint,
+            oxytocin_setpoint=self.des.oxytocin_setpoint,
+            step=-1,
+        )
 
     def step(self, world: GlobalWorldState, contexts: List[NeuronContext]) -> Tuple[EndocrineState, List[bool]]:
         """Run one step of the cluster.

@@ -77,23 +77,21 @@ def run_simulation(n_steps: int = 1000, n_neurons: int = 4, seed: int = 42) -> d
 
 def generate_plot(data: dict, output_path: str = "cluster_simulation_output.png") -> None:
     steps = np.arange(data["n_steps"])
-    fig, axes = plt.subplots(4, 1, figsize=(14, 16), sharex=True)
+    fig, axes = plt.subplots(5, 1, figsize=(14, 18), sharex=True)
     fig.suptitle("Symbiont Cluster — Micro-Network Distributed Inhibition", fontsize=16, fontweight="bold")
 
     c_risk, c_reward = "#d62728", "#2ca02c"
     c_cortisol, c_dopamine, c_oxytocin = "#e377c2", "#17becf", "#9467bd"
 
-    # Add phase bounds directly
     phase_bounds = [(0, 250, "Calm"), (250, 550, "Global Crisis"),
                     (550, 800, "Recovery"), (800, 1000, "Abundance")]
 
     for ax in axes:
         for start, end, label in phase_bounds:
             ax.axvspan(start, end, alpha=0.06, color="gray")
-        # Highlight localized threat
         ax.axvspan(100, 150, alpha=0.15, color="red", label="Localized Threat (N0)" if ax == axes[0] else "")
 
-    # Subplot 1
+    # Subplot 1: External world state
     ax1 = axes[0]
     ax1.plot(steps, data["global_risks"], color=c_risk, alpha=0.7, label="Global Risk (D_t)")
     ax1.plot(steps, data["global_rewards"], color=c_reward, alpha=0.7, label="Global Reward (D_t)")
@@ -101,20 +99,34 @@ def generate_plot(data: dict, output_path: str = "cluster_simulation_output.png"
     ax1.legend(loc="upper right", fontsize=9)
     ax1.set_ylim(-0.05, 1.1)
 
-    # Subplot 2
-    ax2 = axes[1]
-    ax2.plot(steps, data["cortisol_sp"], color=c_cortisol, linestyle="--", label="Cortisol SP", alpha=0.6)
-    ax2.plot(steps, data["dopamine_sp"], color=c_dopamine, linestyle="--", label="Dopamine SP", alpha=0.6)
-    ax2.plot(steps, data["oxytocin_sp"], color=c_oxytocin, linestyle="--", label="Oxytocin SP", alpha=0.6)
-    ax2.plot(steps, data["cortisol"], color=c_cortisol, linewidth=1.5, label="Actual Cortisol")
-    ax2.plot(steps, data["dopamine"], color=c_dopamine, linewidth=1.5, label="Actual Dopamine")
-    ax2.plot(steps, data["oxytocin"], color=c_oxytocin, linewidth=1.5, label="Actual Oxytocin")
-    ax2.set_title("2. Shared Endocrine State (EHD + Per-Neuron Deltas)", fontsize=11)
-    ax2.legend(loc="upper left", fontsize=8, ncol=2)
-    ax2.set_ylim(-0.05, 1.1)
+    # Subplot 2a: Dynamic setpoints (EHD proof)
+    ax2a = axes[1]
+    ax2a.plot(steps, data["cortisol_sp"], color=c_cortisol, linewidth=2.0, label="Cortisol Setpoint")
+    ax2a.plot(steps, data["dopamine_sp"], color=c_dopamine, linewidth=2.0, label="Dopamine Setpoint")
+    ax2a.plot(steps, data["oxytocin_sp"], color=c_oxytocin, linewidth=2.0, label="Oxytocin Setpoint")
+    ax2a.axhline(0.3, color=c_cortisol, linestyle=":", alpha=0.3)
+    ax2a.axhline(0.4, color=c_dopamine, linestyle=":", alpha=0.3)
+    ax2a.axhline(0.1, color=c_oxytocin, linestyle=":", alpha=0.3)
+    ax2a.set_title("2a. EHD: Dynamic Setpoint Recalibration", fontsize=11)
+    ax2a.legend(loc="upper right", fontsize=9)
+    ax2a.set_ylim(-0.05, 0.85)
+    ax2a.set_ylabel("Setpoint")
 
-    # Subplot 3
-    ax3 = axes[2]
+    # Subplot 2b: Actual hormone levels vs setpoints
+    ax2b = axes[2]
+    ax2b.plot(steps, data["cortisol"], color=c_cortisol, linewidth=1.5, label="Cortisol")
+    ax2b.plot(steps, data["dopamine"], color=c_dopamine, linewidth=1.5, label="Dopamine")
+    ax2b.plot(steps, data["oxytocin"], color=c_oxytocin, linewidth=1.5, label="Oxytocin")
+    ax2b.plot(steps, data["cortisol_sp"], color=c_cortisol, linestyle="--", alpha=0.4, linewidth=1.0)
+    ax2b.plot(steps, data["dopamine_sp"], color=c_dopamine, linestyle="--", alpha=0.4, linewidth=1.0)
+    ax2b.plot(steps, data["oxytocin_sp"], color=c_oxytocin, linestyle="--", alpha=0.4, linewidth=1.0)
+    ax2b.set_title("2b. Actual Hormone Levels (solid) vs Setpoints (dashed)", fontsize=11)
+    ax2b.legend(loc="upper right", fontsize=9)
+    ax2b.set_ylim(-0.05, 1.1)
+    ax2b.set_ylabel("Level")
+
+    # Subplot 3: Individual neuron firing
+    ax3 = axes[3]
     fired = data["fired_matrix"]
     for idx in range(data["n_neurons"]):
         fire_times = steps[fired[:, idx]]
@@ -122,14 +134,14 @@ def generate_plot(data: dict, output_path: str = "cluster_simulation_output.png"
     ax3.set_yticks(range(data["n_neurons"]))
     ax3.set_yticklabels([f"N{i}" for i in range(data["n_neurons"])])
     ax3.set_title("3. Individual Neuron Firing Patterns (Differentiated weights)", fontsize=11)
-    
-    # Subplot 4
-    ax4 = axes[3]
-    cluster_firing_rate = fired.mean(axis=1) # Mean over neurons -> cluster firing rate
+
+    # Subplot 4: Distributed inhibition
+    ax4 = axes[4]
+    cluster_firing_rate = fired.mean(axis=1)
     window = 10
     smoothed = np.convolve(cluster_firing_rate, np.ones(window) / window, mode="same")
     ax4.plot(steps, smoothed, color="#ff7f0e", linewidth=2.0, label=f"Cluster Firing Rate ({window}-step avg)")
-    ax4.axvspan(100, 150, alpha=0.2, color="red") # Highlight the distributed inhibition event
+    ax4.axvspan(100, 150, alpha=0.2, color="red")
     ax4.set_title("4. Distributed Inhibition (Note the drop during localized threat at step 100-150)", fontsize=11)
     ax4.legend(loc="upper right", fontsize=9)
     ax4.set_ylim(-0.05, 1.05)
@@ -143,14 +155,33 @@ def generate_plot(data: dict, output_path: str = "cluster_simulation_output.png"
 def run_validation_tests(data: dict) -> dict:
     results = {}
     
-    # Test 1: Backward Compatibility (Check if simulated 1-neuron cluster roughly matches standard firing rate)
-    # Average base firing rate is usually around 0.3 - 0.5 in calm.
-    # To be extremely precise, we would run sam-neuron-v0 exact code, but since we can't alter it, 
-    # we just check if cluster mean is within a sane bound. Real test: Firing rate within reasonable historical limits.
-    # We will simulate a standalone v0 on the fly if needed, but we can approximate:
-    base_firing_rate = data["fired_matrix"][:250].mean()
-    test1 = 0.2 < base_firing_rate < 0.8
-    results["Test 1 (Backward Compatibility)"] = {"pass": bool(test1), "value": float(base_firing_rate)}
+    # Test 1: Backward Compatibility (Unit-level)
+    # Verify that TernaryNeuron.forward() produces identical results to a v0
+    # neuron given the same weights, inputs, and endocrine state. This confirms
+    # the core neuron logic was not altered — only the contribute() method was added.
+    from endocrine_neuron import TernaryNeuron as TN
+    from endocrine_system import EndocrineState as ES
+    test_neuron = TN(n_inputs=8, seed=42)
+    ref_rng = np.random.default_rng(99)
+    test_states = [
+        ES(cortisol=0.2, dopamine=0.4, oxytocin=0.1, cortisol_setpoint=0.3, dopamine_setpoint=0.4, oxytocin_setpoint=0.1, step=0),
+        ES(cortisol=0.8, dopamine=0.1, oxytocin=0.05, cortisol_setpoint=0.7, dopamine_setpoint=0.2, oxytocin_setpoint=0.05, step=1),
+        ES(cortisol=0.1, dopamine=0.8, oxytocin=0.5, cortisol_setpoint=0.1, dopamine_setpoint=0.7, oxytocin_setpoint=0.4, step=2),
+    ]
+    all_match = True
+    for es in test_states:
+        inp = ref_rng.choice([-1.0, 0.0, 1.0], size=8)
+        fired, act, theta = test_neuron.forward(inp, es)
+        # Recompute v0 logic manually: activation = dot(W, x), theta = base * (1 + cg*c) * (1 - dg*d)
+        expected_act = float(np.dot(test_neuron.weights, inp))
+        expected_theta = 1.0 * (1.0 + 2.0 * es.cortisol) * (1.0 - 0.8 * es.dopamine)
+        if abs(act - expected_act) > 1e-10 or abs(theta - expected_theta) > 1e-10:
+            all_match = False
+    results["Test 1 (Backward Compatibility)"] = {
+        "pass": bool(all_match),
+        "value": 1.0 if all_match else 0.0,
+        "note": "Unit-level: forward() produces identical output to v0 formula",
+    }
 
     # Test 2: Distributed Inhibition
     # Baseline before threat

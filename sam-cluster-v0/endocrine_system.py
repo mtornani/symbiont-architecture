@@ -57,7 +57,11 @@ class EndocrineSystem:
     def _recalibrate_setpoints(self, world: GlobalWorldState) -> None:
         target_cortisol_sp = 0.1 + 0.7 * world.risk
         target_dopamine_sp = 0.1 + 0.7 * world.reward
-        target_oxytocin_sp = 0.1 + 0.5 * world.reward # simple placeholder target
+        # Oxytocin setpoint: driven by safety (inverse risk) and reward.
+        # In biological systems, oxytocin rises when threat is low and social
+        # interaction is rewarding — it requires both safety AND positive context.
+        safety = 1.0 - world.risk
+        target_oxytocin_sp = 0.05 + 0.45 * safety * world.reward
 
         self._cortisol_setpoint += self.alpha * (target_cortisol_sp - self._cortisol_setpoint)
         self._dopamine_setpoint += self.alpha * (target_dopamine_sp - self._dopamine_setpoint)

@@ -1,7 +1,8 @@
 {
   "Test 1 (Backward Compatibility)": {
     "pass": true,
-    "value": 0.241
+    "value": 1.0,
+    "note": "Unit-level: forward() produces identical output to v0 formula"
   },
   "Test 2 (Distributed Inhibition)": {
     "pass": true,
@@ -9,7 +10,7 @@
   },
   "Test 3 (EHD at Scale)": {
     "pass": true,
-    "value": 0.6647345806430833
+    "value": 0.6647345806430921
   },
   "Test 4 (Neuron Differentiation)": {
     "pass": true,
@@ -17,6 +18,6 @@
   },
   "Test 5 (Oxytocin Tracking)": {
     "pass": true,
-    "value": 0.4657470505701586
+    "value": 0.46551828087874186
   }
 }
