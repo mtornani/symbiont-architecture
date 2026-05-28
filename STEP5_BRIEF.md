@@ -375,17 +375,15 @@ assert "broadcast_mean" in agg
 
 ### test_10 — Nessuna regressione sugli step precedenti
 ```python
-# I moduli copiati da sam-memory-v0 devono comportarsi identicamente.
-# Crea un MemoryCluster standalone (come in step 4) e verifica che
-# forward(), learn(), consolidate() producano gli stessi output.
-import sys; sys.path.insert(0, "../sam-memory-v0")
-from endocrine_neuron import TernaryNeuron as TN_v4
-# confronta con TernaryNeuron locale
-# (solo forward, senza learn/consolidate per semplicità)
-neuron_v4  = TN_v4(seed=42)
-from endocrine_neuron import TernaryNeuron as TN_v5
-neuron_v5  = TN_v5(seed=42)
-np.testing.assert_array_equal(neuron_v4.weights, neuron_v5.weights)
+# I file copiati da sam-memory-v0 devono essere bytewise identici agli originali.
+# Non usa sys.path.insert (violerebbe il vincolo "no import cross-step").
+import hashlib, pathlib
+
+for fname in ["endocrine_neuron.py", "endocrine_system.py", "cluster.py"]:
+    src  = pathlib.Path(f"../sam-memory-v0/{fname}").read_bytes()
+    copy = pathlib.Path(fname).read_bytes()
+    assert hashlib.md5(src).hexdigest() == hashlib.md5(copy).hexdigest(), \
+        f"{fname} diverge dall'originale in sam-memory-v0/"
 ```
 
 ---
@@ -439,7 +437,9 @@ Se vuoi partire step-by-step e mantenere il controllo:
 Se vuoi che parta direttamente con l'implementazione completa:
 
 > *"Implementa Step 5 seguendo esattamente le specifiche in `STEP5_BRIEF.md`.
-> Rispetta l'ordine dei 10 passi nella sezione 10. Non modificare i file
+> Rispetta l'ordine dei 10 passi nella sezione 10. Per il test_10, usa la
+> versione MD5 specificata nel brief — verifica che i 3 file copiati siano
+> bytewise identici agli originali in `sam-memory-v0/`. Non modificare i file
 > degli step precedenti. Torna a mostrarmi i risultati dei test prima di
 > scrivere il README."*
 
