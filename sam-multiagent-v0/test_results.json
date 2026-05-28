@@ -1,0 +1,68 @@
+{
+  "step": 5,
+  "module": "sam-multiagent-v0",
+  "tests": [
+    {
+      "id": "test_01",
+      "name": "test_01: independent cluster creation",
+      "passed": true,
+      "detail": "OK"
+    },
+    {
+      "id": "test_02",
+      "name": "test_02: inter-cluster oxytocin propagation",
+      "passed": true,
+      "detail": "OK"
+    },
+    {
+      "id": "test_03",
+      "name": "test_03: no direct cortisol cross-propagation",
+      "passed": true,
+      "detail": "OK"
+    },
+    {
+      "id": "test_04",
+      "name": "test_04: collective homeostasis after perturbation",
+      "passed": true,
+      "detail": "OK"
+    },
+    {
+      "id": "test_05",
+      "name": "test_05: local EHD not overridden by coordination",
+      "passed": true,
+      "detail": "OK"
+    },
+    {
+      "id": "test_06",
+      "name": "test_06: collective ethical state emerges without rules",
+      "passed": true,
+      "detail": "OK"
+    },
+    {
+      "id": "test_07",
+      "name": "test_07: serialisation / deserialisation roundtrip",
+      "passed": true,
+      "detail": "OK"
+    },
+    {
+      "id": "test_08",
+      "name": "test_08: numerical stability over 800 steps",
+      "passed": true,
+      "detail": "OK"
+    },
+    {
+      "id": "test_09",
+      "name": "test_09: aggregate endocrine log keys present",
+      "passed": true,
+      "detail": "OK"
+    },
+    {
+      "id": "test_10",
+      "name": "test_10: copied files identical to sam-memory-v0 originals",
+      "passed": true,
+      "detail": "OK"
+    }
+  ],
+  "passed": 10,
+  "total": 10
+}
