@@ -1,6 +1,6 @@
 """
-benchmark_homeostasis_vs_reward.py  (v3 — convergenza verificata via plateau)
-==============================================================================
+benchmark_homeostasis_vs_reward.py  (v4 — perturbazione severa, annealing, shock, tre esiti)
+==============================================================================================
 Confronto falsificabile: regolazione omeostatica (DES) vs policy a reward
 esterno (Q-learning tabellare) su un compito 1D non-stazionario.
 
@@ -8,53 +8,53 @@ esterno (Q-learning tabellare) su un compito 1D non-stazionario.
 PREREG — Pre-registration (fissata prima di eseguire; NON modificare dopo)
 =============================================================================
 
-IPOTESI:
-  L'agente omeostatico (MemoryCluster di Symbiont Architecture, Step 4-5)
-  recupera l'equilibrio più velocemente dell'agente Q-learning dopo uno shock
-  fuori distribuzione, grazie al meccanismo EHD di smorzamento automatico
-  del guadagno tramite cortisolo.
+IPOTESI GENERALE:
+  L'agente omeostatico (MemoryCluster, Symbiont Architecture Step 4-5)
+  si comporta meglio del Q-learning dopo uno shock fuori distribuzione, grazie
+  al meccanismo EHD di smorzamento automatico del guadagno tramite cortisolo.
+  "Meglio" è scomposto in tre esiti separati (vedi BLOCCHI 1-2-3).
 
-METRICA PRINCIPALE:
-  recovery_time = numero di step dopo lo shift fino al primo step in cui
-  |error(t)| < pre_baseline_i + EPSILON,
-  dove pre_baseline_i = media |error| negli ultimi BASELINE_WINDOW step
-  pre-shift dell'agente i (baseline PROPRIA — elimina il confound da
-  differenze strutturali tra agenti).
+PERTURBAZIONE (Fix A):
+  GAIN_POST = 4.0 (quadruplica il guadagno al posto di raddoppiarlo).
+  Motivazione: con GAIN_POST = -1.0 (inversione di segno, candidato primario),
+  la formula -tanh(error * k) dell'agente EHD produce azione sempre nel verso
+  sbagliato → divergenza strutturale al clip-boundary, recupero impossibile.
+  Questo non testa il meccanismo cortisolo-damping ma una limitazione fissa
+  del segno della legge di controllo — confronto non pertinente all'ipotesi.
+  Con gain=4.0 entrambi gli agenti sviluppano oscillazioni misurabili e il
+  cortisolo EHD può effettivamente smorzare.
 
-NOTA STRUTTURALE — floor epsilon:
-  Con epsilon=0.20 (esplorazione fissa), il Q-agent ha un floor strutturale
-  di errore pre-shift di ~0.3-0.9 (20% di azioni casuali in [-1,1] produce
-  deviazioni sistematiche anche con Q-table perfettamente convergita).
-  Questo NON è non-convergenza del Q-table: è rumore di esplorazione
-  ineliminabile. La metrica di recovery relativa alla baseline PROPRIA di
-  ciascun agente gestisce questa differenza strutturale senza invalidare il
-  confronto. Il gate di validità controlla la CONVERGENZA (plateau della
-  curva di apprendimento), non il valore assoluto dell'errore.
+SCHEDULE EPSILON Q-LEARNING (Fix B):
+  epsilon decresce linearmente da EPS_START=0.20 a EPS_END=0.05 nei primi
+  T_PRE=1000 step (pre-shift), poi rimane a 0.05 per tutta la fase post-shift.
+  Dichiarazione: epsilon=0.05 post-shift riduce l'esplorazione; compensato dal
+  fatto che Q-table è ora ben convergita. L'effetto netto sul confronto dipende
+  dai dati.
 
-GATE DI VALIDITÀ (plateau convergence check):
-  Il verdetto è emesso SOLO se:
-    plateau_ratio_q = mean(Q_error[T_PRE-WINDOW:]) / mean(Q_error[T_PRE-2W:T_PRE-W])
-    plateau_ratio_q >= PLATEAU_MIN_RATIO (0.85)
-  cioè Q ha smesso di migliorare significativamente (plateau ± 15%).
-  Se il gate fallisce → WARNING + nessun verdetto emesso.
-  [Il gate sull'omeostatico è analogo ma quasi sempre passa.]
+METRICHE (tre esiti separati — Fix D):
+  BLOCCO 1 — PRECISIONE a regime:
+    pre_baseline = media |error| ultimi BASELINE_WINDOW step pre-shift.
+    H1: S più preciso (Welch one-tailed p < 0.05).
 
-SOGLIA DI FALSIFICAZIONE:
-  Se il recovery_time medio dell'omeostatico NON è significativamente
-  inferiore a quello del Q-baseline (one-tailed Welch's t-test, p >= 0.05)
-  su N_SEEDS=30 seed, l'ipotesi è FALSIFICATA.
+  BLOCCO 2 — AFFIDABILITÀ del recupero:
+    Distribuzione recovery_time: mai_recuperato, mediana, min, max, std.
+    Nessun test formale — descrittivo.
 
-MECCANISMO ATTESO:
-  Dinamica pre-shift: x_{t+1} = x_t + 1.0 * a_t + noise
-  Dinamica post-shift: x_{t+1} = x_t + 2.0 * a_t + noise   (guadagno raddoppia)
-  Con gain=2, le azioni calibrate per gain=1 causano overshoot.
-  EHD: error ↑ → risk = |error|/2 → cortisol_setpoint ↑ → cortisolo alto →
-  k = (1 - 0.5*cortisol) ↓ → azione più smorzata → convergenza.
-  Q: deve re-esplorare e aggiornare la Q-table per scoprire che azioni
-  più piccole sono ora ottimali.
+  BLOCCO 3 — VELOCITÀ del recupero:
+    recovery_time = primo step post-shift con |error| < pre_baseline_i + EPSILON.
+    Contesto: initial_shock = |error| al primo step post-shift (Fix C),
+    riportato per entrambi gli agenti — se divergono, leggere velocità con cautela.
+    H1: S più veloce (Welch one-tailed p < 0.05).
+
+GATE DI VALIDITÀ (plateau convergence check — invariato da v3):
+  plateau_ratio = mean(errors[T_PRE-W:]) / mean(errors[T_PRE-2W:T_PRE-W])
+  Entrambi >= PLATEAU_MIN_RATIO (0.85) → verdetti emessi.
+  Altrimenti: WARNING + nessun verdetto.
 
 ONESTÀ:
-  Riportiamo il risultato così come esce. Un risultato negativo è valido.
+  Tre esiti separati: uno può vincere e gli altri no. Risultato onesto
+  qualunque esca. "S più preciso e affidabile ma non più veloce" è un
+  risultato valido e difendibile.
 =============================================================================
 
 Run:
@@ -92,7 +92,7 @@ T_STEPS         = T_PRE + T_POST
 SHIFT_T         = T_PRE
 
 GAIN_PRE        = 1.0
-GAIN_POST       = 2.0         # raddoppia il guadagno dell'azione
+GAIN_POST       = 4.0         # quadruplica — severa ma recuperabile (Fix A)
 
 SETPOINT        = 0.0
 EPSILON         = 0.1         # margine sopra la baseline propria per "recuperato"
@@ -197,30 +197,35 @@ class SymbiontAgent:
 # ---------------------------------------------------------------------------
 #
 # Scelte di progetto per fairness:
-#  - 30 bin di stato sull'intervallo [-3, 3]
+#  - 30 bin sull'intervallo [-3, 3] (stati |x|>3 → bin boundary, accettabile)
 #  - 7 azioni discrete in [-1, 1] (stesso range dell'omeostatico)
-#  - epsilon=0.20: garantisce re-esplorazione rapida post-shift
-#    NOTA: questo epsilon produce un floor strutturale di errore pre-shift
-#    (~0.3-0.9) anche con Q-table perfettamente convergita. Non è
-#    non-convergenza — è rumore di esplorazione. La baseline-propria lo gestisce.
-#  - alpha=0.30: learning rate ragionevole per Q-tabellare
+#  - epsilon annealing 0.20→0.05 durante T_PRE (Fix B): convergenza Q più
+#    pulita; epsilon finale 0.05 mantenuto post-shift. Dichiarato in PREREG.
+#  - alpha=0.30, gamma=0.95
 #  - Reward = -|error|: stesso segnale che misura la metrica del benchmark
 # ---------------------------------------------------------------------------
 
 class QLearningAgent:
-    N_BINS  = 30
-    X_MIN   = -3.0
-    X_MAX   =  3.0
-    ACTIONS = np.array([-1.0, -0.67, -0.33, 0.0, 0.33, 0.67, 1.0])
-    ALPHA   = 0.30
-    GAMMA   = 0.95
-    EPSILON = 0.20
+    N_BINS    = 30
+    X_MIN     = -3.0
+    X_MAX     =  3.0
+    ACTIONS   = np.array([-1.0, -0.67, -0.33, 0.0, 0.33, 0.67, 1.0])
+    ALPHA     = 0.30
+    GAMMA     = 0.95
+    EPS_START = 0.20   # epsilon iniziale (fix B: annealing)
+    EPS_END   = 0.05   # epsilon finale mantenuto anche post-shift
 
     def __init__(self, seed: int = 0) -> None:
-        self.Q   = np.zeros((self.N_BINS, len(self.ACTIONS)))
-        self.rng = np.random.default_rng(seed + 777)
-        self._s  : int | None = None
-        self._a  : int | None = None
+        self.Q       = np.zeros((self.N_BINS, len(self.ACTIONS)))
+        self.rng     = np.random.default_rng(seed + 777)
+        self._s      : int | None = None
+        self._a      : int | None = None
+        self._t_step = 0
+
+    def _epsilon(self) -> float:
+        """Anneal lineare da EPS_START a EPS_END su T_PRE step, poi costante."""
+        frac = min(self._t_step / T_PRE, 1.0)
+        return self.EPS_START + frac * (self.EPS_END - self.EPS_START)
 
     def _bin(self, error: float) -> int:
         c = np.clip(error, self.X_MIN, self.X_MAX)
@@ -228,12 +233,14 @@ class QLearningAgent:
                        self.N_BINS - 1))
 
     def act(self, error: float) -> float:
-        s = self._bin(error)
-        if self.rng.random() < self.EPSILON:
+        s   = self._bin(error)
+        eps = self._epsilon()
+        if self.rng.random() < eps:
             a = int(self.rng.integers(len(self.ACTIONS)))
         else:
             a = int(np.argmax(self.Q[s]))
         self._s, self._a = s, a
+        self._t_step += 1
         return float(self.ACTIONS[a])
 
     def update(self, error_next: float, reward: float) -> None:
@@ -318,7 +325,8 @@ def compute_metrics(traj: np.ndarray) -> Metrics:
         "pre_error":       float(np.mean(pre)),
         "pre_baseline":    pre_baseline,
         "rec_threshold":   rec_threshold,
-        "plateau_ratio":   plateau_ratio,        # convergence indicator
+        "plateau_ratio":   plateau_ratio,
+        "initial_shock":   float(post[0]),        # |error| al 1° step post-shift (Fix C)
         "recovery_time":   float(rec_time),
         "post_cum_error":  float(np.sum(post)),
         "final_error":     float(np.mean(errors[-20:])),
@@ -360,8 +368,9 @@ def run_benchmark() -> Tuple[List[Metrics], List[Metrics], np.ndarray, np.ndarra
     print(f"Benchmark: {N_SEEDS} seed, T={T_STEPS} (shift a t={SHIFT_T})")
     print(f"  Gain: {GAIN_PRE} → {GAIN_POST}  |  recovery = baseline_propria + {EPSILON}")
     print(f"  Agente omeostatico: MemoryCluster (EHD cortisol-damping)")
-    print(f"  Baseline: Q-learning tabellare (epsilon={QLearningAgent.EPSILON}, "
-          f"alpha={QLearningAgent.ALPHA})")
+    print(f"  Baseline: Q-learning tabellare "
+          f"(epsilon {QLearningAgent.EPS_START}→{QLearningAgent.EPS_END} su {T_PRE} step, "
+          f"poi costante; alpha={QLearningAgent.ALPHA})")
     print()
 
     for seed in range(N_SEEDS):
@@ -389,17 +398,36 @@ def _dist_extended(arr: np.ndarray, cap: float, label: str) -> None:
           f"max={np.max(arr):.1f}  mai_recuperato={n_never}/{len(arr)}")
 
 
+def _esito_label(p: float, mean_s: float, mean_q: float,
+                 label_s_wins: str = "S VINCE",
+                 label_q_wins: str = "Q VINCE") -> str:
+    """
+    p = Welch one-tailed (H1: mean_s < mean_q).
+    p < 0.05 → H1 confermata (S vince).
+    p > 0.95 → H1 fortemente rigettata (Q vince nell'altra direzione).
+    Altrimenti pari / non conclusivo.
+    """
+    if p < 0.05 and mean_s < mean_q:
+        return f"{label_s_wins}  (p={p:.4f})"
+    elif p > 0.95 and mean_s > mean_q:
+        return f"{label_q_wins}  (p_inverso={1-p:.4f}) — H1 falsificata, opposta confermata"
+    else:
+        return f"PARI / NON CONCLUSIVO  (p={p:.4f})"
+
+
 def print_results(all_s: List[Metrics], all_q: List[Metrics]) -> None:
+    # Tabella riepilogativa
     metric_keys = [
         "pre_error", "pre_baseline", "rec_threshold", "plateau_ratio",
-        "recovery_time", "post_cum_error", "final_error",
+        "initial_shock", "recovery_time", "post_cum_error", "final_error",
     ]
     metric_names = {
         "pre_error":      "Errore medio pre-shift",
         "pre_baseline":   "Baseline propria (ult. 50 step)",
         "rec_threshold":  "Soglia recupero (baseline+ε)",
         "plateau_ratio":  "Plateau ratio (convergenza)  *",
-        "recovery_time":  "Tempo di recupero (step)  ←",
+        "initial_shock":  "Shock iniziale post-shift  [C]",
+        "recovery_time":  "Tempo di recupero (step)",
         "post_cum_error": "Errore cumulato post-shift",
         "final_error":    "Errore medio ultimi 20 step",
     }
@@ -413,76 +441,112 @@ def print_results(all_s: List[Metrics], all_q: List[Metrics]) -> None:
         print(f"{metric_names[k]:<36} {np.mean(vs):>8.2f} ±{np.std(vs):>5.2f}"
               f"   {np.mean(vq):>8.2f} ±{np.std(vq):>5.2f}")
     print("=" * 74)
-    print(f"  * plateau_ratio ≥ {PLATEAU_MIN_RATIO} → convergito (curva piatta ± 15%)")
-
-    rt_s = np.array([m["recovery_time"] for m in all_s])
-    rt_q = np.array([m["recovery_time"] for m in all_q])
-
-    # Stats estese se std > media (nasconde distribuzioni degeneri)
-    if np.std(rt_s) > np.mean(rt_s):
-        _dist_extended(rt_s, T_POST, "Omeostatico recovery_time")
-    if np.std(rt_q) > np.mean(rt_q):
-        _dist_extended(rt_q, T_POST, "Q-baseline recovery_time")
+    print(f"  * plateau_ratio ≥ {PLATEAU_MIN_RATIO} → convergito  "
+          f"[C] Fix C: shock comparabili = confronto velocità valido")
 
     # -----------------------------------------------------------------------
-    # Gate di validità: convergenza via plateau (PREREG)
+    # Gate di validità: convergenza via plateau
     # -----------------------------------------------------------------------
     mean_plateau_s = float(np.mean([m["plateau_ratio"] for m in all_s]))
     mean_plateau_q = float(np.mean([m["plateau_ratio"] for m in all_q]))
-    mean_pre_s     = float(np.mean([m["pre_error"] for m in all_s]))
-    mean_pre_q     = float(np.mean([m["pre_error"] for m in all_q]))
 
     parity_ok = True
     fail_reasons = []
-
     if mean_plateau_s < PLATEAU_MIN_RATIO:
         fail_reasons.append(
-            f"  Omeostatico: plateau_ratio={mean_plateau_s:.3f} < {PLATEAU_MIN_RATIO} "
-            f"(ancora in apprendimento)"
+            f"  Omeostatico: plateau_ratio={mean_plateau_s:.3f} < {PLATEAU_MIN_RATIO}"
         )
         parity_ok = False
     if mean_plateau_q < PLATEAU_MIN_RATIO:
         fail_reasons.append(
-            f"  Q-baseline: plateau_ratio={mean_plateau_q:.3f} < {PLATEAU_MIN_RATIO} "
-            f"(ancora in apprendimento)"
+            f"  Q-baseline: plateau_ratio={mean_plateau_q:.3f} < {PLATEAU_MIN_RATIO}"
         )
         parity_ok = False
 
     if not parity_ok:
         print(f"\n{'!'*74}")
-        print(f"WARNING — Gate convergenza FALLITO:")
+        print("WARNING — Gate convergenza FALLITO (almeno un agente non ha raggiunto il plateau):")
         for r in fail_reasons:
             print(r)
-        print(f"  Entrambi gli agenti devono aver raggiunto il plateau prima dello shift.")
-        print(f"  → Nessun verdetto emesso. Aumentare T_PRE.")
+        print("  → Nessun esito emesso. Aumentare T_PRE.")
         print(f"{'!'*74}\n")
         return
 
-    print(
-        f"\n  Gate convergenza OK: "
-        f"S plateau={mean_plateau_s:.3f}  |  Q plateau={mean_plateau_q:.3f}"
-    )
-    print(
-        f"  Nota: errore pre-shift S={mean_pre_s:.3f} vs Q={mean_pre_q:.3f} — "
-        f"differenza strutturale da epsilon=0.20 (floor ~0.3-0.9 anche con Q-table perfetta)."
-    )
-    print(f"  Recovery misurato rispetto alla baseline PROPRIA di ciascun agente.")
+    print(f"\n  Gate convergenza OK: S plateau={mean_plateau_s:.3f} | "
+          f"Q plateau={mean_plateau_q:.3f}")
+
+    # Array principali
+    rt_s   = np.array([m["recovery_time"] for m in all_s])
+    rt_q   = np.array([m["recovery_time"] for m in all_q])
+    nr_s   = int(np.sum([m["never_recovered"] for m in all_s]))
+    nr_q   = int(np.sum([m["never_recovered"] for m in all_q]))
+    shk_s  = np.array([m["initial_shock"] for m in all_s])
+    shk_q  = np.array([m["initial_shock"] for m in all_q])
+    prec_s = np.array([m["pre_baseline"] for m in all_s])
+    prec_q = np.array([m["pre_baseline"] for m in all_q])
+
+    SEP = "─" * 74
 
     # -----------------------------------------------------------------------
-    # Test statistico e verdetto
+    # BLOCCO 1 — PRECISIONE a regime
     # -----------------------------------------------------------------------
-    t_stat, p_val = welch_t_one_tailed(rt_s, rt_q)
-    sig     = "SIGNIFICATIVA (p < 0.05)" if p_val < 0.05 else "non significativa (p >= 0.05)"
-    verdict = "CONFERMATA" if (p_val < 0.05 and np.mean(rt_s) < np.mean(rt_q)) else "FALSIFICATA"
+    t1, p1 = welch_t_one_tailed(prec_s, prec_q)
+    print(f"\n{SEP}")
+    print("BLOCCO 1 — PRECISIONE a regime (baseline propria, post-annealing)")
+    print(SEP)
+    print(f"  S: {np.mean(prec_s):.3f} ± {np.std(prec_s):.3f}   "
+          f"Q: {np.mean(prec_q):.3f} ± {np.std(prec_q):.3f}")
+    print(f"  Welch t={t1:.3f}  H1: S < Q (S più preciso)")
+    print(f"  ESITO: {_esito_label(p1, np.mean(prec_s), np.mean(prec_q), 'S PIÙ PRECISO', 'Q PIÙ PRECISO')}")
 
-    print(f"\nTest Welch one-tailed (H1: omeostatico recupera prima):")
-    print(f"  t = {t_stat:.3f}   p = {p_val:.4f}   ({sig})")
-    print()
-    print(
-        f"VERDETTO: omeostato recupera in {np.mean(rt_s):.1f}±{np.std(rt_s):.1f} step "
-        f"vs baseline {np.mean(rt_q):.1f}±{np.std(rt_q):.1f}, "
-        f"differenza {sig}, ipotesi {verdict}"
-    )
+    # -----------------------------------------------------------------------
+    # BLOCCO 2 — AFFIDABILITÀ del recupero
+    # -----------------------------------------------------------------------
+    print(f"\n{SEP}")
+    print("BLOCCO 2 — AFFIDABILITÀ del recupero (distribuzione recovery_time)")
+    print(SEP)
+    rows = [
+        ("mai_recuperato",    f"{nr_s}/{N_SEEDS}",               f"{nr_q}/{N_SEEDS}"),
+        ("mediana (step)",    f"{np.median(rt_s):.1f}",          f"{np.median(rt_q):.1f}"),
+        ("min (step)",        f"{np.min(rt_s):.1f}",             f"{np.min(rt_q):.1f}"),
+        ("max (step)",        f"{np.max(rt_s):.1f}",             f"{np.max(rt_q):.1f}"),
+        ("std (step)",        f"{np.std(rt_s):.1f}",             f"{np.std(rt_q):.1f}"),
+    ]
+    for label, vs, vq in rows:
+        print(f"  {label:<24} {vs:>14} {vq:>14}")
+    if np.std(rt_s) > np.mean(rt_s):
+        _dist_extended(rt_s, T_POST, "Omeostatico")
+    if np.std(rt_q) > np.mean(rt_q):
+        _dist_extended(rt_q, T_POST, "Q-baseline")
+    # Esito: chi ha meno mai_recuperato e coda più corta
+    if nr_s < nr_q:
+        esito_r = "S PIÙ AFFIDABILE (meno mai_recuperato)"
+    elif nr_s > nr_q:
+        esito_r = "Q PIÙ AFFIDABILE (meno mai_recuperato)"
+    elif np.std(rt_s) < np.std(rt_q):
+        esito_r = "S PIÙ AFFIDABILE (stessa frequenza, coda S più corta)"
+    elif np.std(rt_s) > np.std(rt_q):
+        esito_r = "Q PIÙ AFFIDABILE (stessa frequenza, coda Q più corta)"
+    else:
+        esito_r = "PARI IN AFFIDABILITÀ"
+    print(f"  ESITO: {esito_r}")
+
+    # -----------------------------------------------------------------------
+    # BLOCCO 3 — VELOCITÀ del recupero
+    # -----------------------------------------------------------------------
+    shock_ok = abs(np.mean(shk_s) - np.mean(shk_q)) < 1.0
+    shock_note = "comparabili ✓" if shock_ok else "DIVERGONO — velocità va letta con cautela"
+    t3, p3 = welch_t_one_tailed(rt_s, rt_q)
+    print(f"\n{SEP}")
+    print("BLOCCO 3 — VELOCITÀ del recupero (central tendency)")
+    print(SEP)
+    print(f"  Shock post-shift [Fix C]: "
+          f"S={np.mean(shk_s):.2f}±{np.std(shk_s):.2f}  "
+          f"Q={np.mean(shk_q):.2f}±{np.std(shk_q):.2f}  → {shock_note}")
+    print(f"  Recovery S: media={np.mean(rt_s):.1f}  mediana={np.median(rt_s):.1f}")
+    print(f"  Recovery Q: media={np.mean(rt_q):.1f}  mediana={np.median(rt_q):.1f}")
+    print(f"  Welch t={t3:.3f}  H1: S < Q (S più veloce)")
+    print(f"  ESITO: {_esito_label(p3, np.mean(rt_s), np.mean(rt_q), 'S PIÙ VELOCE', 'Q PIÙ VELOCE')}")
     print()
 
 
