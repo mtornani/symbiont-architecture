@@ -1,15 +1,15 @@
 ---
 layout: default
 title: "Exocentric Homeostatic Deliberation: Ethics as Homeostasis in Small Action Models"
-description: "EHD solves the Rule-Relocation Problem by making internal setpoints dynamic functions of external world-state. Four-step proof-of-concept: from single neuron to a learning organism that sleeps."
+description: "EHD solves the Rule-Relocation Problem by making internal setpoints dynamic functions of external world-state. Five-step proof-of-concept: from single neuron to a coordinating colony that sleeps."
 author: Mirko Tornani
 date: 2026-04-05
 keywords: "Exocentric Homeostatic Deliberation, Digital Endocrine System, Small Action Model, ternary neural network, AI safety, model welfare, BitNet, distributed inhibition, homeostatic reinforcement learning"
 ---
 
-<meta name="description" content="EHD: ethics as internal homeostasis in ternary AI agents. Four-step proof-of-concept with Digital Endocrine System, Hebbian plasticity, and sleep-based memory consolidation.">
+<meta name="description" content="EHD: ethics as internal homeostasis in ternary AI agents. Five-step proof-of-concept with Digital Endocrine System, Hebbian plasticity, sleep-based memory consolidation, and multi-agent coordination.">
 <meta property="og:title" content="Exocentric Homeostatic Deliberation: Ethics as Homeostasis in Small Action Models">
-<meta property="og:description" content="What if AI ethics were a physiological necessity? An organism that feels stress, self-inhibits, learns only when safe, and consolidates memory in sleep. 23/23 tests PASS.">
+<meta property="og:description" content="What if AI ethics were a physiological necessity? An organism that feels stress, self-inhibits, learns only when safe, consolidates memory in sleep, and coordinates without rules. 33/33 tests PASS.">
 <meta property="og:type" content="article">
 <link rel="canonical" href="https://mtornani.github.io/symbiont-architecture/blog/ehd">
 
@@ -21,7 +21,7 @@ keywords: "Exocentric Homeostatic Deliberation, Digital Endocrine System, Small 
 
 Current AI safety depends on external constraints: rules, filters, reward signals chosen by designers. These mechanisms can be modified, removed, or overridden. What if ethical behavior were instead a physiological necessity — something the agent cannot abandon without ceasing to function?
 
-This post documents four working prototypes that progressively demonstrate the concept — from a single neuron to an organism that learns, sleeps, and consolidates memory.
+This post documents five working prototypes that progressively demonstrate the concept — from a single neuron to a colony that learns, sleeps, consolidates memory, and coordinates through hormonal signaling.
 
 ## The Rule-Relocation Problem
 
@@ -107,11 +107,30 @@ The blue shading marks rest phases. Subplot 7 shows that consolidation only succ
 
 ---
 
+## Step 5: Multi-Agent Coordination
+
+The fifth prototype scales to a colony of three independent clusters. Each cluster retains its own Digital Endocrine System and EHD — deliberation remains strictly local. The new mechanism is **inter-cluster oxytocin signaling**: each cluster broadcasts a social signal that neighboring clusters receive as a contribution to their own endocrine state.
+
+- **3 MemoryClusters** operating in parallel, one shared environment schedule
+- **10/10 validation tests PASS** (33/33 cumulative)
+- Broadcast signal: `broadcast_i = oxytocin_i × (1 − cortisol_i)` — stress attenuates social output
+- Cluster-1 and Cluster-2 **do not absorb Cluster-0's cortisol** during its stress phase
+- Cluster-0 cortisol during perturbation: **0.674** — Cluster-1 max: **0.381** (no cross-propagation)
+- Cluster-0 oxytocin: **0.674** during perturbation, recovers to **0.722** with neighbor support
+- Colony oxytocin during abundance: **0.996** vs baseline **0.843**
+- One-step chemical latency: inter-cluster contributions are deposited after each cluster's step completes
+
+Inter-cluster coupling creates a social environment where thriving clusters amplify each other's positive states without transmitting stress. A cluster under threat reduces its broadcast — it cannot request help explicitly, but the attenuated signal naturally reduces incoming support, leaving each cluster's EHD to resolve its own condition independently.
+
+![Step 5 — Multi-Agent Coordination: inter-cluster oxytocin broadcast with no cortisol cross-propagation, Cluster-0 recovery in phase 3, collective abundance state in phase 4](step5_multiagent.png)
+
+---
+
 ## The Key Insight
 
-Across four prototypes, a complete organism emerges: **it feels stress, self-inhibits as a collective, learns only when safe, and consolidates memory in sleep**.
+Across five prototypes, a complete organism emerges: **it feels stress, self-inhibits as a collective, learns only when safe, consolidates memory in sleep, and coordinates with others through hormonal signals without external rules**.
 
-None of these behaviors were programmed as rules. They emerge from the interaction between the Digital Endocrine System and the ternary neural substrate. A stressed agent does not learn. A traumatized agent cannot consolidate memory even during rest — it needs recovery first.
+None of these behaviors were programmed as rules. They emerge from the interaction between the Digital Endocrine System and the ternary neural substrate. A stressed agent does not learn. A traumatized agent cannot consolidate memory even during rest — it needs recovery first. A stressed colony member reduces its social broadcast, containing the perturbation without spreading it.
 
 The mechanism is structurally inseparable from the agent's operation. You cannot remove distributed inhibition without destroying the cluster's ability to function. You cannot disable sleep without losing long-term memory. Ethics is not a module — it is the architecture.
 
@@ -130,6 +149,7 @@ All code is open source, reproducible, and runs with Python + NumPy + Matplotlib
 - **Step 2 — Cluster**: [sam-cluster-v0/](https://github.com/mtornani/symbiont-architecture/tree/main/sam-cluster-v0) — 5/5 tests PASS
 - **Step 3 — Learning**: [sam-learning-v0/](https://github.com/mtornani/symbiont-architecture/tree/main/sam-learning-v0) — 7/7 tests PASS
 - **Step 4 — Memory**: [sam-memory-v0/](https://github.com/mtornani/symbiont-architecture/tree/main/sam-memory-v0) — 8/8 tests PASS
+- **Step 5 — Multi-Agent**: [sam-multiagent-v0/](https://github.com/mtornani/symbiont-architecture/tree/main/sam-multiagent-v0) — 10/10 tests PASS
 - **Slides**: [Interactive presentation](https://mtornani.github.io/symbiont-architecture/slides/)
 - **White paper**: [the_symbiont_architecture.docx](https://github.com/mtornani/symbiont-architecture/blob/main/the_symbiont_architecture.docx)
 
