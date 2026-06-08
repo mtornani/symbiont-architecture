@@ -135,12 +135,12 @@ class SymbiontColony:
         if not self._history:
             return {}
         last      = self._history[-1]
-        cortiols  = [s.cortisol  for s in last.endocrine_states]
-        dopamines = [s.dopamine  for s in last.endocrine_states]
-        oxytocins = [s.oxytocin  for s in last.endocrine_states]
+        cortisols  = [s.cortisol  for s in last.endocrine_states]
+        dopamines  = [s.dopamine  for s in last.endocrine_states]
+        oxytocins  = [s.oxytocin  for s in last.endocrine_states]
         melatonins = [s.melatonin for s in last.endocrine_states]
         return {
-            "mean_cortisol":  float(np.mean(cortiols)),
+            "mean_cortisol":  float(np.mean(cortisols)),
             "mean_dopamine":  float(np.mean(dopamines)),
             "mean_oxytocin":  float(np.mean(oxytocins)),
             "mean_melatonin": float(np.mean(melatonins)),
@@ -150,13 +150,23 @@ class SymbiontColony:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "n_clusters":       self.n_clusters,
-            "n_neurons":        self.n_neurons,
-            "n_inputs":         self.n_inputs,
+            "n_clusters":        self.n_clusters,
+            "n_neurons":         self.n_neurons,
+            "n_inputs":          self.n_inputs,
             "coupling_strength": self.coupling_strength,
-            "base_seed":        self.base_seed,
+            "base_seed":         self.base_seed,
             "clusters": [
                 {
+                    "endocrine": {
+                        "cortisol":           cluster.des.cortisol,
+                        "dopamine":           cluster.des.dopamine,
+                        "oxytocin":           cluster.des.oxytocin,
+                        "melatonin":          cluster.des.melatonin,
+                        "cortisol_setpoint":  cluster.des.cortisol_setpoint,
+                        "dopamine_setpoint":  cluster.des.dopamine_setpoint,
+                        "oxytocin_setpoint":  cluster.des.oxytocin_setpoint,
+                        "melatonin_setpoint": cluster.des.melatonin_setpoint,
+                    },
                     "neurons": [
                         {
                             "weights":      neuron.weights.tolist(),
@@ -164,7 +174,7 @@ class SymbiontColony:
                             "stability":    neuron._stability.tolist(),
                         }
                         for neuron in cluster.neurons
-                    ]
+                    ],
                 }
                 for cluster in self.clusters
             ],
@@ -173,19 +183,41 @@ class SymbiontColony:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SymbiontColony":
         colony = cls(
-            n_clusters           = data["n_clusters"],
+            n_clusters            = data["n_clusters"],
             n_neurons_per_cluster = data["n_neurons"],
-            n_inputs             = data["n_inputs"],
-            coupling_strength    = data["coupling_strength"],
-            base_seed            = data["base_seed"],
+            n_inputs              = data["n_inputs"],
+            coupling_strength     = data["coupling_strength"],
+            base_seed             = data["base_seed"],
         )
         for c_idx, c_data in enumerate(data["clusters"]):
             cluster = colony.clusters[c_idx]
+            if "endocrine" in c_data:
+                endo = c_data["endocrine"]
+                cluster.des._cortisol           = endo["cortisol"]
+                cluster.des._dopamine           = endo["dopamine"]
+                cluster.des._oxytocin           = endo["oxytocin"]
+                cluster.des._melatonin          = endo["melatonin"]
+                cluster.des._cortisol_setpoint  = endo["cortisol_setpoint"]
+                cluster.des._dopamine_setpoint  = endo["dopamine_setpoint"]
+                cluster.des._oxytocin_setpoint  = endo["oxytocin_setpoint"]
+                cluster.des._melatonin_setpoint = endo["melatonin_setpoint"]
+                cluster.current_state = EndocrineState(
+                    cortisol=cluster.des.cortisol,
+                    dopamine=cluster.des.dopamine,
+                    oxytocin=cluster.des.oxytocin,
+                    melatonin=cluster.des.melatonin,
+                    cortisol_setpoint=cluster.des.cortisol_setpoint,
+                    dopamine_setpoint=cluster.des.dopamine_setpoint,
+                    oxytocin_setpoint=cluster.des.oxytocin_setpoint,
+                    melatonin_setpoint=cluster.des.melatonin_setpoint,
+                    step=-1,
+                    is_rest=False,
+                )
             for n_idx, n_data in enumerate(c_data["neurons"]):
-                neuron              = cluster.neurons[n_idx]
-                neuron.weights      = np.array(n_data["weights"],      dtype=np.float64)
+                neuron               = cluster.neurons[n_idx]
+                neuron.weights       = np.array(n_data["weights"],      dtype=np.float64)
                 neuron._ltm_baseline = np.array(n_data["ltm_baseline"], dtype=np.float64)
-                neuron._stability   = np.array(n_data["stability"],    dtype=np.int32)
+                neuron._stability    = np.array(n_data["stability"],    dtype=np.int32)
         return colony
 
     @property
