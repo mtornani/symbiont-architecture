@@ -322,6 +322,10 @@ def run_tests(
                 colony2.clusters[i].neurons[0].weights,
                 err_msg=f"weights mismatch in cluster {i}",
             )
+            assert abs(colony.clusters[i].des.cortisol - colony2.clusters[i].des.cortisol) < 1e-9, \
+                f"cortisol mismatch in cluster {i}"
+            assert abs(colony.clusters[i].des.oxytocin - colony2.clusters[i].des.oxytocin) < 1e-9, \
+                f"oxytocin mismatch in cluster {i}"
     record("test_07: serialisation / deserialisation roundtrip", t07)
 
     # ------------------------------------------------------------------
