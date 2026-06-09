@@ -73,6 +73,26 @@ ONESTÀ:
   "ĝ peggiora" = adattamento controproducente sotto disturbo dinamico
                  (il risultato più informativo e più probabile).
   "nessun agente attenua" = serve cambio di struttura, non di parametro.
+
+================================================================================
+HARDENING — Quarta curva: Fisso×2
+================================================================================
+Quando ĝ si clampaa a GAIN_HAT_MIN=0.5, l'azione dell'adattivo diventa:
+  action_adaptive = clip(-tanh(error*k) / 0.5, -1, 1) = clip(2*(-tanh(error*k)), -1, 1)
+Questo è esattamente un EHD fisso con guadagno raddoppiato (Fisso×2).
+La quarta curva verifica se il "vantaggio" dell'adattivo a f < 0.2 sia
+interamente spiegato dall'action amplificata (nessun adattamento reale)
+o se vi sia una differenza residua.
+
+DOMANDA HARDENING (d):
+  La curva di Fisso×2 coincide con quella dell'adattivo a f < 0.2?
+  Se sì: il vantaggio a bassa frequenza è solo guadagno più alto, non adattamento.
+  Se no: c'è un contributo del meccanismo adattivo oltre il semplice raddoppio.
+
+SFORZO DI CONTROLLO:
+  Metrica aggiuntiva = RMS(azione) nella finestra stazionaria.
+  Se Adattivo e Fisso×2 ottengono meno errore spendendo più azione rispetto
+  al Fisso, il vantaggio è un trade sforzo↔errore, non superiorità strutturale.
 ================================================================================
 
 Run:
@@ -123,6 +143,9 @@ FREQS = [0.005, 0.010, 0.020, 0.035, 0.060, 0.100, 0.150,
 STATIONARITY_RATIO = 1.25   # RMS(2°metà) / RMS(1°metà) > questo → segnalare
 SANITY_GAIN_MAX    = 5.0    # guadagno massimo ammissibile (P-controller DC ≈ 2.0)
 GAIN_EQUIV_TOL     = 0.05   # soglia |delta| per "pari" vs "migliore/peggiore"
+
+# Soglia per dichiarare "coincidenza" tra F×2 e Adattivo (hardening)
+F2_MATCH_TOL = 0.03   # |gain_f2 - gain_a| < questa → curve coincidono
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +205,43 @@ class SymbiontAgent:
         self._step_idx += 1
         k = 1.0 - 0.5 * self._endo.cortisol
         return float(np.clip(-math.tanh(error * k), -1.0, 1.0))
+
+
+class SymbiontAgentX2:
+    """EHD fisso con azione raddoppiata (clip(2×action,-1,1)).
+
+    Equivalente esatto dell'adattivo quando ĝ è clampato a GAIN_HAT_MIN=0.5:
+      action_adaptive = clip(-tanh(error*k) / 0.5, -1, 1)
+                      = clip(2 * (-tanh(error*k)), -1, 1)
+    Usato come controllo causale: se la curva di F×2 coincide con quella
+    dell'adattivo a f < 0.2, il vantaggio è interamente spiegato dall'action
+    amplificata, non da alcun adattamento strutturale.
+    """
+    N_NEURONS = 4
+    N_INPUTS  = 8
+
+    def __init__(self, seed: int = 0) -> None:
+        self.cluster   = MemoryCluster(n_neurons=self.N_NEURONS, n_inputs=self.N_INPUTS, base_seed=seed)
+        self._endo     = self.cluster.current_state
+        self._step_idx = 0
+
+    def _make_contexts(self, error: float, risk: float, reward: float) -> List[NeuronContext]:
+        inp    = np.zeros(self.N_INPUTS)
+        inp[0] = float(np.sign(error))
+        inp[1] = 1.0 if abs(error) > 0.5 else 0.0
+        inp[2] = 1.0 if abs(error) < 0.1 else 0.0
+        inp[3] = -float(np.sign(error))
+        return [NeuronContext(inputs=inp.copy(), local_risk=risk, local_reward=reward)
+                for _ in range(self.N_NEURONS)]
+
+    def act(self, error: float) -> float:
+        risk   = float(min(abs(error) / 2.0, 1.0))
+        reward = 1.0 - risk
+        world  = GlobalWorldState(risk=risk, reward=reward, step=self._step_idx, is_rest=False)
+        self._endo, _, _, _ = self.cluster.step(world, self._make_contexts(error, risk, reward))
+        self._step_idx += 1
+        k = 1.0 - 0.5 * self._endo.cortisol
+        return float(np.clip(-2.0 * math.tanh(error * k), -1.0, 1.0))
 
 
 class AdaptiveSymbiontAgent:
@@ -272,50 +332,71 @@ class QLearningAgent:
 
 
 # ---------------------------------------------------------------------------
-# Episodio con disturbo sinusoidale a frequenza f
+# Episodio con disturbo sinusoidale a frequenza f — quattro agenti
 # ---------------------------------------------------------------------------
-def run_episode_freq(
-    env_seed: int,
-    freq: float,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def run_episode_freq(env_seed: int, freq: float) -> dict:
     """
-    Tre ambienti con stesso seed (stesso rumore), disturbo sinusoidale a frequenza f.
-    Ritorna: (errors_f, errors_a, errors_q, gain_hat_traj) ciascuno shape (T_TOTAL,).
-    errors_* = errore signed (x - SETPOINT).
+    Quattro ambienti con stesso seed (stesso rumore), disturbo sinusoidale a freq f.
+    Ritorna dict con chiavi 'f', 'f2', 'a', 'q', ciascuna con:
+      'errors':   np.ndarray(T_TOTAL,) — errore signed (x - SETPOINT)
+      'actions':  np.ndarray(T_TOTAL,) — azione prodotta (pre-clip dell'env)
+    Più 'a'['gain_hat']: np.ndarray(T_TOTAL,).
     """
     env_f   = Env1D(seed=env_seed)
+    env_f2  = Env1D(seed=env_seed)
     env_a   = Env1D(seed=env_seed)
     env_q   = Env1D(seed=env_seed)
-    agent_f = SymbiontAgent(seed=0)
-    agent_a = AdaptiveSymbiontAgent(seed=0)
-    agent_q = QLearningAgent(seed=env_seed)
 
-    errors_f = np.zeros(T_TOTAL)
-    errors_a = np.zeros(T_TOTAL)
-    errors_q = np.zeros(T_TOTAL)
-    gain_hat = np.zeros(T_TOTAL)
+    agent_f  = SymbiontAgent(seed=0)
+    agent_f2 = SymbiontAgentX2(seed=0)
+    agent_a  = AdaptiveSymbiontAgent(seed=0)
+    agent_q  = QLearningAgent(seed=env_seed)
+
+    errors_f  = np.zeros(T_TOTAL)
+    errors_f2 = np.zeros(T_TOTAL)
+    errors_a  = np.zeros(T_TOTAL)
+    errors_q  = np.zeros(T_TOTAL)
+    actions_f  = np.zeros(T_TOTAL)
+    actions_f2 = np.zeros(T_TOTAL)
+    actions_a  = np.zeros(T_TOTAL)
+    actions_q  = np.zeros(T_TOTAL)
+    gain_hat   = np.zeros(T_TOTAL)
 
     for t in range(T_TOTAL):
         dist = DIST_AMP * math.sin(2.0 * math.pi * freq * t)
 
-        err_f = env_f.error
-        act_f = agent_f.act(err_f)
+        err_f  = env_f.error
+        act_f  = agent_f.act(err_f)
         _, e_f = env_f.step(act_f, dist)
-        errors_f[t] = e_f
+        errors_f[t]  = e_f
+        actions_f[t] = act_f
 
-        err_a = env_a.error
-        act_a = agent_a.act(err_a)
+        err_f2  = env_f2.error
+        act_f2  = agent_f2.act(err_f2)
+        _, e_f2 = env_f2.step(act_f2, dist)
+        errors_f2[t]  = e_f2
+        actions_f2[t] = act_f2
+
+        err_a  = env_a.error
+        act_a  = agent_a.act(err_a)
         _, e_a = env_a.step(act_a, dist)
-        errors_a[t] = e_a
-        gain_hat[t] = agent_a.gain_hat
+        errors_a[t]  = e_a
+        actions_a[t] = act_a
+        gain_hat[t]  = agent_a.gain_hat
 
-        err_q = env_q.error
-        act_q = agent_q.act(err_q)
+        err_q  = env_q.error
+        act_q  = agent_q.act(err_q)
         _, e_q = env_q.step(act_q, dist)
         agent_q.update(e_q, -abs(e_q))
-        errors_q[t] = e_q
+        errors_q[t]  = e_q
+        actions_q[t] = act_q
 
-    return errors_f, errors_a, errors_q, gain_hat
+    return {
+        'f':  {'errors': errors_f,  'actions': actions_f},
+        'f2': {'errors': errors_f2, 'actions': actions_f2},
+        'a':  {'errors': errors_a,  'actions': actions_a, 'gain_hat': gain_hat},
+        'q':  {'errors': errors_q,  'actions': actions_q},
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -326,8 +407,13 @@ def rms(x: np.ndarray) -> float:
 
 
 def compute_gain(errors_steady: np.ndarray) -> float:
-    """Guadagno = RMS(error_stazionario) / DIST_AMP. >1 = amplifica, <1 = attenua."""
+    """Guadagno = RMS(error_stazionario) / DIST_AMP."""
     return rms(errors_steady) / DIST_AMP
+
+
+def compute_effort(actions_steady: np.ndarray) -> float:
+    """Sforzo = RMS(azione_stazionaria)."""
+    return rms(actions_steady)
 
 
 def is_nonstationary(errors_steady: np.ndarray) -> bool:
@@ -344,56 +430,78 @@ def is_nonstationary(errors_steady: np.ndarray) -> bool:
 def run_sweep() -> dict:
     """
     results[freq] = {
-        'f': {'gains': np.ndarray(N_SEEDS,), 'ns_count': int},
-        'a': {'gains': np.ndarray(N_SEEDS,), 'ns_count': int,
-              'gain_hat_steady_mean': np.ndarray(N_SEEDS,)},
-        'q': {'gains': np.ndarray(N_SEEDS,), 'ns_count': int},
+        'f':  {'gains': ndarray(N_SEEDS), 'efforts': ndarray(N_SEEDS), 'ns_count': int},
+        'f2': {'gains': ndarray(N_SEEDS), 'efforts': ndarray(N_SEEDS), 'ns_count': int},
+        'a':  {'gains': ndarray(N_SEEDS), 'efforts': ndarray(N_SEEDS), 'ns_count': int,
+               'gain_hat_steady_mean': ndarray(N_SEEDS)},
+        'q':  {'gains': ndarray(N_SEEDS), 'efforts': ndarray(N_SEEDS), 'ns_count': int},
     }
     """
     print("Benchmark risposta in frequenza — disturbance rejection, setpoint fisso")
+    print("  [Hardening: quarta curva Fisso×2 + sforzo di controllo RMS(azione)]")
     print(f"  DIST_AMP={DIST_AMP}  GAIN={GAIN}  SETPOINT={SETPOINT}  NOISE_STD={NOISE_STD}")
     print(f"  T_TOTAL={T_TOTAL}  T_TRANS={T_TRANS}  T_STEADY={T_STEADY}")
     print(f"  N_SEEDS={N_SEEDS}  |FREQS|={len(FREQS)}: {FREQS[0]:.3f} → {FREQS[-1]:.3f}")
-    print(f"  SANITY_GAIN_MAX={SANITY_GAIN_MAX}  STATIONARITY_RATIO={STATIONARITY_RATIO}")
     print()
 
     results: dict = {}
 
     for freq in FREQS:
         gains_f  = np.zeros(N_SEEDS)
+        gains_f2 = np.zeros(N_SEEDS)
         gains_a  = np.zeros(N_SEEDS)
         gains_q  = np.zeros(N_SEEDS)
+        effs_f   = np.zeros(N_SEEDS)
+        effs_f2  = np.zeros(N_SEEDS)
+        effs_a   = np.zeros(N_SEEDS)
+        effs_q   = np.zeros(N_SEEDS)
         gh_mean  = np.zeros(N_SEEDS)
-        ns_f = ns_a = ns_q = 0
+        ns_f = ns_f2 = ns_a = ns_q = 0
 
         for seed in range(N_SEEDS):
-            ef, ea, eq, gh = run_episode_freq(seed, freq)
-            ef_s = ef[T_TRANS:]
-            ea_s = ea[T_TRANS:]
-            eq_s = eq[T_TRANS:]
-            gh_s = gh[T_TRANS:]
+            ep = run_episode_freq(seed, freq)
 
-            gains_f[seed] = compute_gain(ef_s)
-            gains_a[seed] = compute_gain(ea_s)
-            gains_q[seed] = compute_gain(eq_s)
-            gh_mean[seed] = float(np.mean(gh_s))
+            ef_s   = ep['f']['errors'][T_TRANS:]
+            ef2_s  = ep['f2']['errors'][T_TRANS:]
+            ea_s   = ep['a']['errors'][T_TRANS:]
+            eq_s   = ep['q']['errors'][T_TRANS:]
+            af_s   = ep['f']['actions'][T_TRANS:]
+            af2_s  = ep['f2']['actions'][T_TRANS:]
+            aa_s   = ep['a']['actions'][T_TRANS:]
+            aq_s   = ep['q']['actions'][T_TRANS:]
+            gh_s   = ep['a']['gain_hat'][T_TRANS:]
 
-            if is_nonstationary(ef_s): ns_f += 1
-            if is_nonstationary(ea_s): ns_a += 1
-            if is_nonstationary(eq_s): ns_q += 1
+            gains_f[seed]  = compute_gain(ef_s)
+            gains_f2[seed] = compute_gain(ef2_s)
+            gains_a[seed]  = compute_gain(ea_s)
+            gains_q[seed]  = compute_gain(eq_s)
+            effs_f[seed]   = compute_effort(af_s)
+            effs_f2[seed]  = compute_effort(af2_s)
+            effs_a[seed]   = compute_effort(aa_s)
+            effs_q[seed]   = compute_effort(aq_s)
+            gh_mean[seed]  = float(np.mean(gh_s))
+
+            if is_nonstationary(ef_s):  ns_f  += 1
+            if is_nonstationary(ef2_s): ns_f2 += 1
+            if is_nonstationary(ea_s):  ns_a  += 1
+            if is_nonstationary(eq_s):  ns_q  += 1
 
         results[freq] = {
-            'f': {'gains': gains_f, 'ns_count': ns_f},
-            'a': {'gains': gains_a, 'ns_count': ns_a, 'gain_hat_steady_mean': gh_mean},
-            'q': {'gains': gains_q, 'ns_count': ns_q},
+            'f':  {'gains': gains_f,  'efforts': effs_f,  'ns_count': ns_f},
+            'f2': {'gains': gains_f2, 'efforts': effs_f2, 'ns_count': ns_f2},
+            'a':  {'gains': gains_a,  'efforts': effs_a,  'ns_count': ns_a,
+                   'gain_hat_steady_mean': gh_mean},
+            'q':  {'gains': gains_q,  'efforts': effs_q,  'ns_count': ns_q},
         }
 
         print(
-            f"  f={freq:.3f}  F:{np.mean(gains_f):.3f}(med {np.median(gains_f):.3f})"
-            f"  A:{np.mean(gains_a):.3f}(med {np.median(gains_a):.3f})"
-            f"  Q:{np.mean(gains_q):.3f}(med {np.median(gains_q):.3f})"
-            f"  ns:F={ns_f} A={ns_a} Q={ns_q}"
-            f"  ĝ_mean={np.mean(gh_mean):.3f}"
+            f"  f={freq:.3f}  "
+            f"F:{np.mean(gains_f):.3f}/{np.mean(effs_f):.3f}  "
+            f"F2:{np.mean(gains_f2):.3f}/{np.mean(effs_f2):.3f}  "
+            f"A:{np.mean(gains_a):.3f}/{np.mean(effs_a):.3f}  "
+            f"Q:{np.mean(gains_q):.3f}/{np.mean(effs_q):.3f}  "
+            f"ĝ:{np.mean(gh_mean):.3f}  "
+            f"(gain/effort)"
         )
 
     return results
@@ -403,79 +511,80 @@ def run_sweep() -> dict:
 # Output testuale
 # ---------------------------------------------------------------------------
 def print_results(results: dict) -> None:
-    SEP  = "─" * 94
-    SEP2 = "═" * 94
+    SEP  = "─" * 100
+    SEP2 = "═" * 100
+
+    agents    = ['f', 'f2', 'a', 'q']
+    ag_labels = {'f': 'Fisso', 'f2': 'Fisso×2', 'a': 'Adattivo', 'q': 'Q-learning'}
 
     # ------- SANITY CHECK -------
     print(f"\n{SEP}")
-    print(f"SANITY CHECK — guadagno ≤ {SANITY_GAIN_MAX} a tutte le frequenze (P-ctrl DC ≈ 2.0)")
+    print(f"SANITY CHECK — guadagno ≤ {SANITY_GAIN_MAX} a tutte le frequenze")
     print(SEP)
     sanity_ok = True
     for freq in FREQS:
-        gf = float(np.mean(results[freq]['f']['gains']))
-        ga = float(np.mean(results[freq]['a']['gains']))
-        gq = float(np.mean(results[freq]['q']['gains']))
-        worst = max(gf, ga, gq)
-        flag = "  ← ATTENZIONE: guadagno eccessivo" if worst > SANITY_GAIN_MAX else ""
+        vals = {ag: float(np.mean(results[freq][ag]['gains'])) for ag in agents}
+        worst = max(vals.values())
+        flag = "  ← ATTENZIONE" if worst > SANITY_GAIN_MAX else ""
         if worst > SANITY_GAIN_MAX:
             sanity_ok = False
-        print(f"  f={freq:.3f}: Fisso={gf:.3f}  Adattivo={ga:.3f}  Q={gq:.3f}{flag}")
-    if sanity_ok:
-        print("  → PASSA. Guadagni finiti su tutto lo spettro testato.")
-    else:
-        print("\n  SANITY CHECK FALLITO. Leggere i risultati con cautela.")
+        print(f"  f={freq:.3f}: " +
+              "  ".join(f"{ag_labels[ag]}={vals[ag]:.3f}" for ag in agents) + flag)
+    print("  → PASSA." if sanity_ok else "\n  SANITY CHECK FALLITO.")
 
     # ------- STAZIONARIETÀ -------
     print(f"\n{SEP}")
-    print("CHECK STAZIONARIETÀ — [!] se ns > 3/30 su qualsiasi (agente, freq)")
+    print("CHECK STAZIONARIETÀ — [!] se ns > 3/30")
     print(SEP)
     any_ns = False
     for freq in FREQS:
-        ns_f = results[freq]['f']['ns_count']
-        ns_a = results[freq]['a']['ns_count']
-        ns_q = results[freq]['q']['ns_count']
-        if max(ns_f, ns_a, ns_q) > 3:
-            print(f"  [!] f={freq:.3f}: Fisso={ns_f}/30  Adattivo={ns_a}/30  Q={ns_q}/30"
-                  f"  ← finestra non stazionaria, aumentare T_TOTAL")
+        ns = {ag: results[freq][ag]['ns_count'] for ag in agents}
+        if max(ns.values()) > 3:
+            print(f"  [!] f={freq:.3f}: " + "  ".join(f"{ag_labels[ag]}={ns[ag]}/30" for ag in agents))
             any_ns = True
     if not any_ns:
-        print("  → Tutte le finestre stazionarie (ns ≤ 3/30 ovunque).")
+        print("  → Tutte le finestre stazionarie.")
 
-    # ------- TABELLA PRINCIPALE -------
+    # ------- TABELLA GUADAGNO -------
     print(f"\n{SEP}")
-    print("TABELLA — Guadagno di risposta (RMS_errore_stazionario / DIST_AMP)  [30 seed]")
-    print(f"  > 1 = AMPLIFICA il disturbo (peggio)   < 1 = ATTENUA (meglio)")
+    print("TABELLA GUADAGNO — RMS(error) / DIST_AMP  [30 seed, media]")
+    print(f"  > 1 = amplifica   < 1 = attenua   |F2-A| < {F2_MATCH_TOL} = curve coincidono [≡]")
     print(SEP)
-    hdr = (f"  {'freq':>6}  {'F_mean':>7} {'F_med':>7}  "
-           f"{'A_mean':>7} {'A_med':>7}  "
-           f"{'Q_mean':>7} {'Q_med':>7}  "
-           f"{'A vs F':>10}  {'div M-m F':>9}")
+    hdr = f"  {'freq':>6}  {'Fisso':>7}  {'Fisso×2':>8}  {'Adattivo':>9}  {'Q':>7}  {'|F2-A|':>7}  {'match?':>7}"
     print(hdr)
     print("  " + "─" * (len(hdr) - 2))
     for freq in FREQS:
-        gf = results[freq]['f']['gains']
-        ga = results[freq]['a']['gains']
-        gq = results[freq]['q']['gains']
-        delta = float(np.mean(ga) - np.mean(gf))
-        if delta < -GAIN_EQUIV_TOL:
-            avf = "A MEGLIO"
-        elif delta > +GAIN_EQUIV_TOL:
-            avf = "A PEGGIO"
-        else:
-            avf = "PARI"
-        # divergenza media/mediana come indicatore di distribuzione degenere
-        div_mm_f = abs(float(np.mean(gf)) - float(np.median(gf)))
-        div_flag = "  [!]" if div_mm_f > 0.20 else ""
-        print(f"  {freq:.3f}  {np.mean(gf):>7.3f} {np.median(gf):>7.3f}  "
-              f"{np.mean(ga):>7.3f} {np.median(ga):>7.3f}  "
-              f"{np.mean(gq):>7.3f} {np.median(gq):>7.3f}  "
-              f"{avf:>10}  {div_mm_f:>7.3f}{div_flag}")
+        gf  = float(np.mean(results[freq]['f']['gains']))
+        gf2 = float(np.mean(results[freq]['f2']['gains']))
+        ga  = float(np.mean(results[freq]['a']['gains']))
+        gq  = float(np.mean(results[freq]['q']['gains']))
+        delta_f2a = abs(gf2 - ga)
+        match = "[≡]" if delta_f2a < F2_MATCH_TOL else ""
+        print(f"  {freq:.3f}  {gf:>7.3f}  {gf2:>8.3f}  {ga:>9.3f}  {gq:>7.3f}  "
+              f"{delta_f2a:>7.3f}  {match:>7}")
+
+    # ------- TABELLA SFORZO -------
+    print(f"\n{SEP}")
+    print("TABELLA SFORZO — RMS(azione) nella finestra stazionaria  [30 seed, media]")
+    print("  Sforzo maggiore → azione più aggressiva → consuma attuatore")
+    print(SEP)
+    hdr2 = f"  {'freq':>6}  {'Fisso':>7}  {'Fisso×2':>8}  {'Adattivo':>9}  {'Q':>7}  {'F2/F':>6}  {'A/F':>6}"
+    print(hdr2)
+    print("  " + "─" * (len(hdr2) - 2))
+    for freq in FREQS:
+        ef  = float(np.mean(results[freq]['f']['efforts']))
+        ef2 = float(np.mean(results[freq]['f2']['efforts']))
+        ea  = float(np.mean(results[freq]['a']['efforts']))
+        eq  = float(np.mean(results[freq]['q']['efforts']))
+        r_f2f = ef2 / (ef + 1e-9)
+        r_af  = ea  / (ef + 1e-9)
+        print(f"  {freq:.3f}  {ef:>7.3f}  {ef2:>8.3f}  {ea:>9.3f}  {eq:>7.3f}  "
+              f"{r_f2f:>6.2f}  {r_af:>6.2f}")
 
     # ------- DERIVA DI ĝ -------
     print(f"\n{SEP}")
     print("DERIVA DI ĝ — media nella finestra stazionaria [T_TRANS, T_TOTAL]")
-    print(f"  Atteso se INERTE: ĝ ≈ {GAIN_HAT_INIT:.1f} (gain vero)")
-    print(f"  Atteso se DERIVA: ĝ → {GAIN_HAT_MIN} (GAIN_HAT_MIN) per la previsione pre-reg")
+    print(f"  Atteso: ĝ ≈ {GAIN_HAT_INIT:.1f} (inerte); ĝ → {GAIN_HAT_MIN} a bassa f; ĝ → >1 ad alta f")
     print(SEP)
     for freq in FREQS:
         gh = results[freq]['a']['gain_hat_steady_mean']
@@ -483,10 +592,14 @@ def print_results(results: dict) -> None:
               f"  min={np.min(gh):.3f}  max={np.max(gh):.3f}")
 
     # ------- VERDETTI PREREG -------
-    gains_f_arr = np.array([np.mean(results[f]['f']['gains']) for f in FREQS])
-    gains_a_arr = np.array([np.mean(results[f]['a']['gains']) for f in FREQS])
-    gains_q_arr = np.array([np.mean(results[f]['q']['gains']) for f in FREQS])
-    delta_af    = gains_a_arr - gains_f_arr
+    gains_f_arr  = np.array([np.mean(results[fr]['f']['gains'])  for fr in FREQS])
+    gains_f2_arr = np.array([np.mean(results[fr]['f2']['gains']) for fr in FREQS])
+    gains_a_arr  = np.array([np.mean(results[fr]['a']['gains'])  for fr in FREQS])
+    gains_q_arr  = np.array([np.mean(results[fr]['q']['gains'])  for fr in FREQS])
+    effs_f_arr   = np.array([np.mean(results[fr]['f']['efforts'])  for fr in FREQS])
+    effs_f2_arr  = np.array([np.mean(results[fr]['f2']['efforts']) for fr in FREQS])
+    effs_a_arr   = np.array([np.mean(results[fr]['a']['efforts'])  for fr in FREQS])
+    delta_af     = gains_a_arr - gains_f_arr
 
     print(f"\n{SEP2}")
     print("VERDETTI PREREG — lettura della curva di risposta in frequenza")
@@ -494,136 +607,213 @@ def print_results(results: dict) -> None:
 
     # (a) Legge fissa
     print(f"\n  (a) LEGGE FISSA:")
-    f_star_f     = FREQS[int(np.argmax(gains_f_arr))]
-    f_min_f      = FREQS[int(np.argmin(gains_f_arr))]
-    mono_up      = bool(np.all(np.diff(gains_f_arr) > 0))
-    mono_dn      = bool(np.all(np.diff(gains_f_arr) < 0))
-    n_above_1_f  = int(np.sum(gains_f_arr > 1.0))
-    print(f"    Guadagno min = {np.min(gains_f_arr):.3f} a f = {f_min_f:.3f}")
-    print(f"    Guadagno max = {np.max(gains_f_arr):.3f} a f = {f_star_f:.3f}")
-    print(f"    Frequenze con guadagno > 1 (amplificazione): {n_above_1_f}/{len(FREQS)}")
+    mono_dn = bool(np.all(np.diff(gains_f_arr) < 0))
+    mono_up = bool(np.all(np.diff(gains_f_arr) > 0))
+    n_above_1_f = int(np.sum(gains_f_arr > 1.0))
+    print(f"    Guadagno min = {np.min(gains_f_arr):.3f} a f = {FREQS[int(np.argmin(gains_f_arr))]:.3f}")
+    print(f"    Guadagno max = {np.max(gains_f_arr):.3f} a f = {FREQS[int(np.argmax(gains_f_arr))]:.3f}")
+    print(f"    Freq con guadagno > 1: {n_above_1_f}/{len(FREQS)}")
     if mono_dn:
         print("    PROFILO: monotono DECRESCENTE — attenua meglio ad alta frequenza (P-ctrl classico)")
     elif mono_up:
-        print("    PROFILO: monotono CRESCENTE — amplifica sempre di più ad alta frequenza")
+        print("    PROFILO: monotono CRESCENTE")
     else:
-        print("    PROFILO: non monotono — presenza di picco intermedio")
+        print("    PROFILO: non monotono")
 
     # (b) ĝ vs fisso
-    print(f"\n  (b) ĝ (ADATTIVO) vs LEGGE FISSA [soglia GAIN_EQUIV_TOL={GAIN_EQUIV_TOL}]:")
+    print(f"\n  (b) ĝ (ADATTIVO) vs LEGGE FISSA:")
     n_better = int(np.sum(delta_af < -GAIN_EQUIV_TOL))
     n_worse  = int(np.sum(delta_af > +GAIN_EQUIV_TOL))
     n_equal  = len(FREQS) - n_better - n_worse
-    worst_freq = FREQS[int(np.argmax(delta_af))]
-    best_freq  = FREQS[int(np.argmin(delta_af))]
-    print(f"    A < F (adattivo meglio): {n_better}/{len(FREQS)} freq")
-    print(f"    A > F (adattivo peggio): {n_worse}/{len(FREQS)} freq  ← freq peggiore: {worst_freq:.3f}")
-    print(f"    A ≈ F (inerte):          {n_equal}/{len(FREQS)} freq  ← freq migliore: {best_freq:.3f}")
-    gh_all = np.concatenate([results[f]['a']['gain_hat_steady_mean'] for f in FREQS])
-    mean_gh_global = float(np.mean(gh_all))
-    print(f"    ĝ medio globale (tutti freq, tutti seed): {mean_gh_global:.3f}"
-          f"  (GAIN_HAT_INIT={GAIN_HAT_INIT:.1f}, MIN={GAIN_HAT_MIN})")
-    if n_worse > n_better and n_worse > n_equal:
-        print("    → PREVISIONE PRE-REG CONFERMATA: ĝ PEGGIORA la risposta in frequenza")
-        print("      Meccanismo: disturbance inquina la stima → ĝ deriva → action scalata male")
+    gh_all   = np.concatenate([results[fr]['a']['gain_hat_steady_mean'] for fr in FREQS])
+    print(f"    A < F (meglio): {n_better}/{len(FREQS)}  A > F (peggio): {n_worse}/{len(FREQS)}"
+          f"  A≈F: {n_equal}/{len(FREQS)}")
+    print(f"    ĝ medio globale: {float(np.mean(gh_all)):.3f}")
+    if n_better > n_worse and n_better > n_equal:
+        print("    → PREVISIONE PRE-REG FALSIFICATA: ĝ MIGLIORA (inatteso — vedere hardening)")
     elif n_equal >= n_better + n_worse:
-        print("    → PREVISIONE PRE-REG CONFERMATA (caso inerte): curve ≈ identiche")
-        print("      ĝ non aiuta né peggiora su questo tipo di disturbo")
-    elif n_better > n_worse and n_better > n_equal:
-        print("    → PREVISIONE PRE-REG FALSIFICATA: ĝ MIGLIORA la risposta in frequenza")
-        print("      Inatteso — riportare con cautela, verificare il meccanismo")
+        print("    → PREVISIONE PRE-REG CONFERMATA (inerte)")
+    elif n_worse > n_better:
+        print("    → PREVISIONE PRE-REG CONFERMATA: ĝ peggiora")
     else:
-        print("    → RISULTATO MISTO: ĝ meglio in alcune bande, peggio in altre")
-        if mean_gh_global < 0.6:
-            print(f"      ĝ tende al minimo ({GAIN_HAT_MIN}) → action amplificata → coerente con previsione")
+        print("    → RISULTATO MISTO")
 
     # (c) Q
     print(f"\n  (c) Q-LEARNING:")
-    q_better = int(np.sum(gains_q_arr < gains_f_arr - GAIN_EQUIV_TOL))
-    q_worse  = int(np.sum(gains_q_arr > gains_f_arr + GAIN_EQUIV_TOL))
-    q_equal  = len(FREQS) - q_better - q_worse
-    f_star_q = FREQS[int(np.argmax(gains_q_arr))]
-    f_min_q  = FREQS[int(np.argmin(gains_q_arr))]
-    mono_q_dn = bool(np.all(np.diff(gains_q_arr) < 0))
-    mono_q_up = bool(np.all(np.diff(gains_q_arr) > 0))
-    print(f"    Q < F (meglio del fisso): {q_better}/{len(FREQS)} freq")
-    print(f"    Q > F (peggio del fisso): {q_worse}/{len(FREQS)} freq")
-    print(f"    Q ≈ F (pari):             {q_equal}/{len(FREQS)} freq")
-    print(f"    Guadagno max Q = {np.max(gains_q_arr):.3f} a f = {f_star_q:.3f}")
-    print(f"    Guadagno min Q = {np.min(gains_q_arr):.3f} a f = {f_min_q:.3f}")
-    if mono_q_dn:
-        print("    PROFILO Q: monotono decrescente (più robusto ad alta frequenza)")
-    elif mono_q_up:
-        print("    PROFILO Q: monotono crescente (meno robusto ad alta frequenza)")
-    else:
-        print("    PROFILO Q: non monotono — Q ha addestramento localizzato su quella freq")
+    q_worse = int(np.sum(gains_q_arr > gains_f_arr + GAIN_EQUIV_TOL))
     n_above_1_q = int(np.sum(gains_q_arr > 1.0))
-    print(f"    Frequenze con guadagno > 1: {n_above_1_q}/{len(FREQS)}")
+    f_star_q = FREQS[int(np.argmax(gains_q_arr))]
+    print(f"    Q > F (peggio del fisso): {q_worse}/{len(FREQS)} freq")
+    print(f"    Guadagno max Q = {np.max(gains_q_arr):.3f} a f = {f_star_q:.3f}")
+    print(f"    Freq con guadagno > 1: {n_above_1_q}/{len(FREQS)}")
 
-    print(f"\n{'═' * 94}\n")
+    # ------- VERDETTO HARDENING -------
+    print(f"\n{SEP2}")
+    print("VERDETTO HARDENING — Fisso×2 come controllo causale")
+    print(SEP2)
+
+    # Selezione freq < 0.2 per la domanda principale
+    low_freqs = [fr for fr in FREQS if fr < 0.20]
+    n_match_low = sum(
+        1 for fr in low_freqs
+        if abs(np.mean(results[fr]['f2']['gains']) - np.mean(results[fr]['a']['gains'])) < F2_MATCH_TOL
+    )
+    n_total_low = len(low_freqs)
+
+    print(f"\n  (d) F×2 vs Adattivo a f < 0.20 ({n_total_low} punti, soglia |F2-A| < {F2_MATCH_TOL}):")
+    for fr in low_freqs:
+        gf2 = float(np.mean(results[fr]['f2']['gains']))
+        ga  = float(np.mean(results[fr]['a']['gains']))
+        delta = abs(gf2 - ga)
+        tag = "[≡ coincide]" if delta < F2_MATCH_TOL else f"[Δ={delta:.3f}]"
+        print(f"    f={fr:.3f}: F×2={gf2:.3f}  A={ga:.3f}  {tag}")
+
+    if n_match_low == n_total_low:
+        concl_d = (
+            f"F×2 COINCIDE con Adattivo a f < 0.2 ({n_match_low}/{n_total_low} punti).\n"
+            f"    Il vantaggio dell'adattivo a bassa frequenza è INTERAMENTE spiegato\n"
+            f"    dall'action amplificata (ĝ → 0.5 → azione ×2) — non dall'adattamento strutturale."
+        )
+    elif n_match_low == 0:
+        concl_d = (
+            f"F×2 NON coincide con Adattivo a f < 0.2 (0/{n_total_low} punti).\n"
+            f"    Esiste un contributo dell'adattamento strutturale oltre il semplice raddoppio."
+        )
+    else:
+        concl_d = (
+            f"F×2 coincide parzialmente: {n_match_low}/{n_total_low} punti sotto soglia.\n"
+            f"    Risultato misto — leggere i delta riga per riga."
+        )
+    print(f"    → {concl_d}")
+
+    # Trade sforzo↔errore
+    print(f"\n  (e) TRADE SFORZO↔ERRORE:")
+    print(f"    [ratio sforzo = RMS(azione agente) / RMS(azione Fisso)]")
+    print(f"    [ratio errore = guadagno agente / guadagno Fisso]")
+    print(f"    {'freq':>6}  {'sforzo F×2/F':>13}  {'errore F×2/F':>13}  "
+          f"{'sforzo A/F':>11}  {'errore A/F':>11}")
+    for fr in FREQS:
+        gf   = float(np.mean(results[fr]['f']['gains']))
+        gf2  = float(np.mean(results[fr]['f2']['gains']))
+        ga   = float(np.mean(results[fr]['a']['gains']))
+        ef_  = float(np.mean(results[fr]['f']['efforts']))
+        ef2_ = float(np.mean(results[fr]['f2']['efforts']))
+        ea_  = float(np.mean(results[fr]['a']['efforts']))
+        print(f"    {fr:.3f}  {ef2_/ef_:>13.3f}  {gf2/gf:>13.3f}  "
+              f"{ea_/ef_:>11.3f}  {ga/gf:>11.3f}")
+
+    # Riassunto trade
+    mean_eff_ratio_f2 = float(np.mean(effs_f2_arr / (effs_f_arr + 1e-9)))
+    mean_gain_ratio_f2 = float(np.mean(gains_f2_arr / (gains_f_arr + 1e-9)))
+    mean_eff_ratio_a  = float(np.mean(effs_a_arr  / (effs_f_arr + 1e-9)))
+    mean_gain_ratio_a = float(np.mean(gains_a_arr  / (gains_f_arr + 1e-9)))
+    print(f"\n    Medie su tutte le frequenze:")
+    print(f"    Fisso×2: sforzo={mean_eff_ratio_f2:.3f}× Fisso  errore={mean_gain_ratio_f2:.3f}× Fisso")
+    print(f"    Adattivo: sforzo={mean_eff_ratio_a:.3f}× Fisso  errore={mean_gain_ratio_a:.3f}× Fisso")
+    if mean_gain_ratio_f2 < 1.0 and mean_eff_ratio_f2 > 1.0:
+        print("    → F×2: meno errore AL COSTO di più azione. Trade sforzo↔errore CONFERMATO.")
+    if mean_gain_ratio_a < 1.0 and mean_eff_ratio_a > 1.0:
+        print("    → Adattivo: meno errore AL COSTO di più azione. Trade sforzo↔errore CONFERMATO.")
+    if abs(mean_gain_ratio_f2 - mean_gain_ratio_a) < 0.05 and abs(mean_eff_ratio_f2 - mean_eff_ratio_a) < 0.05:
+        print("    → Adattivo e F×2 equivalenti su entrambe le dimensioni. Il vantaggio è solo gain.")
+    elif mean_gain_ratio_a < mean_gain_ratio_f2 and mean_eff_ratio_a <= mean_eff_ratio_f2:
+        print("    → Adattivo MIGLIORE di F×2 a parità o minor sforzo: c'è un contributo strutturale.")
+    elif mean_gain_ratio_a > mean_gain_ratio_f2:
+        print("    → F×2 MIGLIORE di Adattivo: ĝ introduce inefficienza rispetto al puro raddoppio.")
+
+    print(f"\n{'═' * 100}\n")
 
 
 # ---------------------------------------------------------------------------
-# Grafico — curva di risposta in frequenza
+# Grafico — tre pannelli: guadagno, sforzo, ĝ
 # ---------------------------------------------------------------------------
 def plot_results(results: dict, out_path: str = "benchmark_frequency_response_output.png") -> None:
     freq_arr = np.array(FREQS)
-    CLR_F = "#e74c3c"
-    CLR_A = "#27ae60"
-    CLR_Q = "#3498db"
+    CLR_F  = "#e74c3c"   # rosso — Fisso
+    CLR_F2 = "#f39c12"   # arancio — Fisso×2
+    CLR_A  = "#27ae60"   # verde — Adattivo
+    CLR_Q  = "#3498db"   # blu — Q-learning
 
-    mean_f  = np.array([np.mean(results[f]['f']['gains']) for f in FREQS])
-    std_f   = np.array([np.std(results[f]['f']['gains'])  for f in FREQS])
-    mean_a  = np.array([np.mean(results[f]['a']['gains']) for f in FREQS])
-    std_a   = np.array([np.std(results[f]['a']['gains'])  for f in FREQS])
-    mean_q  = np.array([np.mean(results[f]['q']['gains']) for f in FREQS])
-    std_q   = np.array([np.std(results[f]['q']['gains'])  for f in FREQS])
-    mean_gh = np.array([np.mean(results[f]['a']['gain_hat_steady_mean']) for f in FREQS])
-    std_gh  = np.array([np.std(results[f]['a']['gain_hat_steady_mean'])  for f in FREQS])
+    def arr(ag: str, key: str) -> np.ndarray:
+        return np.array([np.mean(results[f][ag][key]) for f in FREQS])
 
-    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    def arr_std(ag: str, key: str) -> np.ndarray:
+        return np.array([np.std(results[f][ag][key]) for f in FREQS])
+
+    mean_f   = arr('f',  'gains');   std_f   = arr_std('f',  'gains')
+    mean_f2  = arr('f2', 'gains');   std_f2  = arr_std('f2', 'gains')
+    mean_a   = arr('a',  'gains');   std_a   = arr_std('a',  'gains')
+    mean_q   = arr('q',  'gains');   std_q   = arr_std('q',  'gains')
+
+    eff_f    = arr('f',  'efforts'); eff_std_f  = arr_std('f',  'efforts')
+    eff_f2   = arr('f2', 'efforts'); eff_std_f2 = arr_std('f2', 'efforts')
+    eff_a    = arr('a',  'efforts'); eff_std_a  = arr_std('a',  'efforts')
+    eff_q    = arr('q',  'efforts'); eff_std_q  = arr_std('q',  'efforts')
+
+    mean_gh  = np.array([np.mean(results[f]['a']['gain_hat_steady_mean']) for f in FREQS])
+    std_gh   = np.array([np.std( results[f]['a']['gain_hat_steady_mean']) for f in FREQS])
+
+    fig, axes = plt.subplots(1, 3, figsize=(22, 6))
     fig.suptitle(
         f"Risposta in Frequenza — disturbance rejection, setpoint fisso\n"
         f"DIST_AMP={DIST_AMP}  GAIN={GAIN}  T_TOTAL={T_TOTAL}  [{N_SEEDS} seed]",
         fontsize=11,
     )
 
-    # (0) Curva di risposta in frequenza — OUTPUT PRIMARIO
+    # --- Pannello 0: Curva di risposta in frequenza (OUTPUT PRIMARIO) ---
     ax = axes[0]
-    ax.semilogx(freq_arr, mean_f, "o-", color=CLR_F, linewidth=2.0, markersize=6,
-                label="Fisso (EHD)", zorder=3)
-    ax.fill_between(freq_arr, mean_f - std_f, mean_f + std_f, alpha=0.18, color=CLR_F)
-    ax.semilogx(freq_arr, mean_a, "s-", color=CLR_A, linewidth=2.0, markersize=6,
-                label="Adattivo (EHD+ĝ)", zorder=3)
-    ax.fill_between(freq_arr, mean_a - std_a, mean_a + std_a, alpha=0.18, color=CLR_A)
-    ax.semilogx(freq_arr, mean_q, "^-", color=CLR_Q, linewidth=2.0, markersize=6,
-                label="Q-learning", zorder=3)
-    ax.fill_between(freq_arr, mean_q - std_q, mean_q + std_q, alpha=0.18, color=CLR_Q)
-    ax.axhline(1.0, linestyle="--", color="black", linewidth=1.0,
-               label="guadagno = 1 (soglia amplificazione)")
+    for mean, std, clr, lbl, mrk in [
+        (mean_f,  std_f,  CLR_F,  "Fisso (EHD)",    "o"),
+        (mean_f2, std_f2, CLR_F2, "Fisso×2",         "D"),
+        (mean_a,  std_a,  CLR_A,  "Adattivo (EHD+ĝ)","s"),
+        (mean_q,  std_q,  CLR_Q,  "Q-learning",      "^"),
+    ]:
+        ax.semilogx(freq_arr, mean, f"{mrk}-", color=clr, linewidth=2.0, markersize=6,
+                    label=lbl, zorder=3)
+        ax.fill_between(freq_arr, mean - std, mean + std, alpha=0.15, color=clr)
+    ax.axhline(1.0, linestyle="--", color="black", linewidth=1.0, label="guadagno = 1")
     ax.set_xlabel("Frequenza f (cicli/step)  [scala log]", fontsize=10)
-    ax.set_ylabel(f"Guadagno di risposta  RMS(error) / {DIST_AMP}", fontsize=10)
+    ax.set_ylabel(f"Guadagno  RMS(error) / {DIST_AMP}", fontsize=10)
     ax.set_title("Curva di risposta in frequenza\nmedia ± std su 30 seed", fontsize=10)
-    ax.legend(fontsize=9)
+    ax.legend(fontsize=8)
     ax.grid(True, which="both", alpha=0.3)
     ax.set_xlim(freq_arr[0] * 0.8, freq_arr[-1] * 1.2)
 
-    # (1) Deriva di ĝ vs frequenza
+    # --- Pannello 1: Sforzo di controllo ---
     ax = axes[1]
+    for eff, std, clr, lbl, mrk in [
+        (eff_f,  eff_std_f,  CLR_F,  "Fisso",    "o"),
+        (eff_f2, eff_std_f2, CLR_F2, "Fisso×2",  "D"),
+        (eff_a,  eff_std_a,  CLR_A,  "Adattivo", "s"),
+        (eff_q,  eff_std_q,  CLR_Q,  "Q",        "^"),
+    ]:
+        ax.semilogx(freq_arr, eff, f"{mrk}-", color=clr, linewidth=2.0, markersize=6,
+                    label=lbl, zorder=3)
+        ax.fill_between(freq_arr, eff - std, eff + std, alpha=0.15, color=clr)
+    ax.set_xlabel("Frequenza f (cicli/step)  [scala log]", fontsize=10)
+    ax.set_ylabel("Sforzo  RMS(azione)", fontsize=10)
+    ax.set_title("Sforzo di controllo\n(più alto = più azione applicata)", fontsize=10)
+    ax.legend(fontsize=8)
+    ax.grid(True, which="both", alpha=0.3)
+    ax.set_xlim(freq_arr[0] * 0.8, freq_arr[-1] * 1.2)
+
+    # --- Pannello 2: Deriva di ĝ ---
+    ax = axes[2]
     ax.semilogx(freq_arr, mean_gh, "s-", color=CLR_A, linewidth=2.0, markersize=6,
                 label="ĝ medio (finestra stazionaria)")
     ax.fill_between(freq_arr, mean_gh - std_gh, mean_gh + std_gh, alpha=0.2, color=CLR_A)
     ax.axhline(GAIN_HAT_INIT, linestyle="--", color="gray", linewidth=1.0,
-               label=f"ĝ = {GAIN_HAT_INIT:.1f} (gain vero, nessuna deriva)")
-    ax.axhline(GAIN_HAT_MIN, linestyle=":", color="#e74c3c", linewidth=1.0,
-               label=f"GAIN_HAT_MIN = {GAIN_HAT_MIN}")
+               label=f"ĝ = {GAIN_HAT_INIT:.1f} (gain vero)")
+    ax.axhline(GAIN_HAT_MIN, linestyle=":", color=CLR_F, linewidth=1.2,
+               label=f"GAIN_HAT_MIN = {GAIN_HAT_MIN}  (azione ×2)")
     ax.set_xlabel("Frequenza f (cicli/step)  [scala log]", fontsize=10)
     ax.set_ylabel("ĝ (gain stimato)", fontsize=10)
-    ax.set_title("Deriva di ĝ sotto disturbo sinusoidale\n(previsione: ĝ → MIN per correlazione spurio)", fontsize=10)
-    ax.legend(fontsize=9)
+    ax.set_title("Deriva di ĝ sotto disturbo sinusoidale\n(< 0.5 clampato → azione raddoppiata)", fontsize=10)
+    ax.legend(fontsize=8)
     ax.grid(True, which="both", alpha=0.3)
     ax.set_xlim(freq_arr[0] * 0.8, freq_arr[-1] * 1.2)
-    ax.set_ylim(GAIN_HAT_MIN - 0.2, GAIN_HAT_INIT + 0.5)
+    gh_max = max(float(np.max(mean_gh + std_gh)), GAIN_HAT_INIT + 0.5)
+    ax.set_ylim(GAIN_HAT_MIN - 0.3, gh_max + 0.3)
 
     plt.tight_layout()
     fig.savefig(out_path, dpi=120, bbox_inches="tight")
