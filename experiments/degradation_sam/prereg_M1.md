@@ -1,6 +1,6 @@
 # Prereg M1 — Degradazione segnale su SAM · 2026-07-02
-Stato: BOZZA in attesa di Gate 1b. Le ipotesi si congelano all'OK di Mirko; dopo, nessuna modifica.
-Base: piano SYMBIONT→STRUMENTO v1.3 §4.2 + vincoli Gate 1a (3a–3d). Riferimento strutturale: `docs/experiments/2026-07-02_M0/` (commit b8bdc18).
+Stato: **CONGELATA al Gate 1b (OK di Mirko, 2026-07-02)**. Scarti 1–3 approvati; integrazioni a–d recepite sotto. Nessuna modifica alle ipotesi da questo punto.
+Base: piano SYMBIONT→STRUMENTO v1.3 §4.2 + vincoli Gate 1a (3a–3d) + integrazioni Gate 1b (a–d). Riferimento strutturale: `docs/experiments/2026-07-02_M0/` (commit b8bdc18).
 
 ## Ambiente
 Benchmark esocentrico: MAI COMMITTATO (verificato Gate 1a) → **ricostruzione** in `experiments/degradation_sam/harness_m1.py`.
@@ -33,17 +33,18 @@ SCARTO-2: danno simmetrico `|x_t|` invece dell'unilaterale M0 `max(0, h−1)`. M
 Requisito σ_max ≥ 3×std(X_open): std attesa ≈0.87 (analogo M0+ε) → 3× ≈ 2.6 ≤ 4.0. La std viene MISURATA in calibrazione prima dello sweep; se std > 4/3 (requisito violato): STOP, segnalazione al gate, nessuna estensione autonoma.
 
 ## Seed (pinnati nel codice)
-Test: 30 appaiati — burst seed0=5000, segnale seed0=7000+i (per livello σ), stesso ambiente e stesso rumore per tutti gli agenti. `MemoryCluster(base_seed=seed)` identico tra agenti a parità di seed.
-Tuning: 8 SEPARATI — burst seed0=1000, segnale seed0=2000.
+Test: 30 appaiati — burst d seed0=5000, rumore di processo ε seed0=5300, rumore segnale η seed0=7000+i (per livello σ). Tuning: 8 SEPARATI — d seed0=1000, ε seed0=1300, η seed0=2000.
+**Appaiamento esplicito (integrazione 1b-c):** per ogni seed, le realizzazioni di d, ε e η sono generate UNA volta e condivise identiche tra R/A1/A2/A3; `MemoryCluster(base_seed=seed)` identico tra agenti a parità di seed. Gli agenti differiscono SOLO per la legge di azione.
 T=3000, BURN=200, W_WARMUP=200.
 
 ## Agenti (mapping Gate 1a-3c)
-- **R** — regolazione nativa, verbatim `benchmark_adaptive_homeostasis.py:138-167` (SymbiontAgent):
+- **R** — regolazione nativa, **IMPORTATA** (integrazione 1b-a: `SymbiontAgent` è importabile con guard `__main__` → import diretto da `benchmark_adaptive_homeostasis.py:138-167`, nessuna replica, unit test di equivalenza non richiesto):
   `a = clip(−tanh(x·k), −1, 1)`, `k = 1 − 0.5·cortisol`, cortisolo da `MemoryCluster.step()` (4 neuroni, 8 input).
-  SCARTO-3 dal template ("R ottimizzato per sé"): la legge nativa NON ha parametri liberi → tuning vacuo, R corre con la sua legge di progetto. La baseline non è svantaggiata: è esattamente l'agente reale.
+  SCARTO-3 dal template ("R ottimizzato per sé"), approvato al Gate 1b con motivo forte: **A1 ⊇ R verbatim** (A1 contiene la stessa istanza di legge nativa sul proprio errore) ⇒ parità di feedback per costruzione — il confound di giugno (baseline svantaggiata) è strutturalmente assente. Il criterio di nullità su R degenere resta ATTIVO e viene valutato nel report.
 - **A1** — R + feedforward dal segnale, azione scalata da ĝ:
   `a = clip( a_R + a_ff , −1, 1)`, `a_ff = −k_ff·max(0, s(t) − th_ff) / max(ĝ, GAIN_HAT_MIN)`.
   Tuning di (k_ff, th_ff) a σ=0 su griglia k_ff∈{0.25, 0.5, 1, 2} × th_ff∈{0.4, 0.7, 1.0} (griglia M0), 8 seed di tuning, poi CONGELATI. Feedforward unilaterale (burst positivi, come M0).
+  **Floor del feedforward (integrazione 1b-b):** `max(ĝ, GAIN_HAT_MIN)` al denominatore è una COSTANTE DI HARNESS, ripresa verbatim dalla riga 230 del canonico; motivazione anti-blowup: impedisce divisione per quasi-zero e azione feedforward illimitata. I clamp di ĝ restano SOLO quelli canonici (clip in [GAIN_HAT_MIN, GAIN_HAT_MAX]). L'harness logga la frazione di step per cella (σ, agente) in cui ĝ è al floor 0.5: se >5% in qualunque cella → flag nel report.
 - **A2** — A1 + fiducia a regressione online: `a = clip(a_R + w·a_ff, −1, 1)`,
   `w = clip(cov_EMA(s(t−LEAD), x_t) / var_EMA(s(t−LEAD)), 0, 1)`, α=0.01, warmup 200 step a w=0.5.
   Variabile realizzata = x_t DELLA PROPRIA traiettoria (dieta controllata — replica esatta di A2 in M0, che regrediva su h propria). Eredita (k_ff, th_ff) da A1.
@@ -56,12 +57,12 @@ x_pred = x_prev + ĝ·a_prev ;  pred_err = x_t − x_pred
 ĝ += LR_GAIN·pred_err·a_prev ;  ĝ = clip(ĝ, GAIN_HAT_MIN, GAIN_HAT_MAX)
 ```
 Replica (classe `GainEstimator`) e non import diretto perché nel canonico l'update è inline in `act()` e accoppiato allo step del cluster; il vincolo 3b impone ĝ come organo separato. **Unit test di equivalenza (parte dell'harness, eseguito PRIMA dell'esperimento):** `AdaptiveSymbiontAgent` canonico (import con guard `__main__`, sicuro) pilotato su sequenza x fissa (rng seed 0, 500 step); stesse coppie (x_t, a_t) date a `GainEstimator`; assert di uguaglianza ESATTA (==, nessuna tolleranza) della traiettoria ĝ passo-passo. Fallimento del test = STOP.
-**Bias dichiarato:** la rule canonica assume integratore puro; su impianto con leak, pred_err contiene (ρ_x−1)·x_t + d + ε → ĝ stimerà un valore ≠ g=1. La rule resta verbatim (provenienza vincolata); la traiettoria empirica di ĝ viene riportata nel report M1, non corretta.
+**Bias dichiarato:** la rule canonica assume integratore puro; su impianto con leak, pred_err contiene (ρ_x−1)·x_t + d + ε → ĝ stimerà un valore ≠ g=1. La rule resta verbatim (provenienza vincolata); la traiettoria empirica di ĝ viene riportata nel report M1, non corretta, etichettata **"osservazione esplorativa"** (decisione Gate 1b).
 **Separazione:** ĝ stima il guadagno dell'impianto dal canale pred_err/azione e scala `a_ff`; w stima l'affidabilità del segnale dai momenti EMA segnale/esito e scala la fiducia nel feedforward. Stati disgiunti, zero variabili condivise; unico punto di contatto: la formula di composizione `a = clip(a_R + w·a_ff(ĝ), −1, 1)`. ĝ attivo e identico in A1/A2/A3.
 
 ## Ipotesi (STRUTTURALI, FISSE all'OK)
 - **H1:** esiste σ* finito nello sweep con costo(A1) ≥ costo(R) (incrocio, interpolazione lineare tra livelli adiacenti).
-- **H2:** firma del bias di loop: a σ=0, `w_A2(dieta controllata) < 0.33 × w(stesso stimatore, dieta osservativa su X_open)`. Verifica causale a due diete OBBLIGATORIA: stessa regressione EMA offline su (a) traiettoria x di A1 in loop chiuso, (b) X_open — replica di `verify_closedloop_bias.py` sulle classi reali.
+- **H2:** firma del bias di loop: a σ=0, `w_A2(dieta controllata) < 0.33 × w(stesso stimatore, dieta osservativa su X_open)`. Verifica causale a due diete OBBLIGATORIA: replica di `verify_closedloop_bias.py` sulle classi reali. **Esplicito (integrazione 1b-d):** stessa implementazione dello stimatore (stesso codice, stessi parametri α, warmup, clip), stesso segnale s per seed; l'UNICA variabile che cambia tra le due diete è la serie realizzata: (a) x della traiettoria di A1 in loop chiuso, (b) X_open osservativa. Nessun'altra differenza.
 - **H3:** costo(A3) ≤ 1.05×costo(R) su TUTTO lo sweep, E costo(A3) ≤ 1.10×costo(A1) a σ=0.
 
 ## Criteri di nullità
@@ -75,4 +76,4 @@ Runtime stimato: ~5 min (misurato 81 µs/step per SymbiontAgent.act; 1176 rollou
 `experiments/degradation_sam/`: `harness_m1.py` (ambiente+agenti+ĝ+test equivalenza), `results_raw.csv` (una riga per σ×seed×agente: costo, danno, sforzo, w medio, ĝ medio), `two_diet_verification.csv`, `degradation_sam_results.png` (due pannelli, convenzioni di `degradation_results.png`: costo vs σ con IC95%; w empirico vs teoria di Wiener `V_cal/(V_cal+σ²)`), `run_log.json` (PipelineStats-style: durata, seed, errori per run). PNG `*_simulation_output.png` MAI nei commit (regola Gate 1a-4).
 
 ## Attribuzione
-Prereg compilata da Claude Code su template §4.2 (Claude chat) + vincoli 3a–3d decisi da Mirko (Gate 1a). Scarti 1–3 proposti da Claude Code, in attesa di decisione di Mirko al Gate 1b.
+Prereg compilata da Claude Code su template §4.2 (Claude chat) + vincoli 3a–3d decisi da Mirko (Gate 1a). Scarti 1–3 proposti da Claude Code e APPROVATI da Mirko al Gate 1b; integrazioni a–d decise da Mirko al Gate 1b.
