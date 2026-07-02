@@ -9,7 +9,10 @@ Nullità R: |azione| media = 0.0640 ∈ (0.001, 0.999) → criterio NON scattato
 |---|---|---|
 | H1 — crossover σ* finito | **CONFERMATA** | σ* = 1.13, IC95 bootstrap appaiato [1.07, 1.19] (incrocio in 1000/1000 resample) |
 | H2 — firma bias di loop | **CONFERMATA** | σ=0: w_ctrl=0.202 < 0.33×w_open=0.330 (w_open=1.000) |
-| H3 — pavimento di A3 | **CONFERMATA** | A3≤1.05×R su tutto lo sweep (0 violazioni); a σ=0 A3/A1=0.0349/0.0321=1.087 ≤ 1.10 |
+| H3 — pavimento di A3 | **CONFERMATA** | A3≤1.05×R su tutto lo sweep (0 violazioni); a σ=0 A3/A1=0.0349/0.0321=1.087 ≤ 1.10 — IC95 bootstrap appaiato [1.074, 1.100]*, margine sottile su soglia 1.10 |
+
+\* Integrazione ESPLORATIVA Gate 1c (stesso metodo bootstrap di σ*, 1000 resample, rng 42): il bordo superiore
+dell'IC tocca la soglia; 27/1000 resample sopra 1.10. Il verdetto prereg (sulle medie) resta CONFERMATA.
 
 ## Sweep (costo medio/step ± IC95%, 30 seed appaiati)
 | σ | R | A1 | A2 | A3 | w2 | w3 | teoria | ĝ_A1 |
@@ -44,6 +47,19 @@ Osservazione esplorativa (etichetta da Gate 1b): ĝ medio ≈ 1.02–1.03 su tut
 piccolo rispetto a g=1, coerente con il leak non modellato dichiarato in prereg ((ρ_x−1)·x correlato con a).
 Riportato, non corretto.
 
+## La legge R2 sui costi (integrazione ESPLORATIVA Gate 1c — elevazione dell'osservazione 4)
+A2 ≈ R su TUTTO lo sweep (max |costo(A2)−costo(R)| = 0.0013, sotto l'IC95 di entrambi): lo stimatore di
+fiducia auto-appreso in loop chiuso rende il monitor **reattivo de facto anche con segnale perfetto** —
+a σ=0 A2 paga 0.0409 contro lo 0.0321 di A1, buttando l'87% del vantaggio anticipatorio disponibile.
+Non è un dettaglio di M0: è replicato M0→SAM con classi reali (EHD + MemoryCluster). È la lettura sui
+costi della legge R2: il monitor che interviene sopprime gli eventi che proverebbero che il suo segnale
+funziona, quindi smette di fidarsi del segnale, quindi smette di anticipare.
+
+**Nota dose-risposta (esplorativa, 2 punti — non una legge):** w_ctrl a σ=0 è 0.113 in M0 (dove l'azione
+smorza il burst in arrivo: soppressione forte) e 0.202 su SAM (correzione additiva con leak: soppressione
+debole). Coerente col meccanismo: bias ∝ efficacia dell'intervento. Candidata a future work: sweep
+sull'efficacia e dell'intervento.
+
 ## Osservazioni inattese
 1. **H3 seconda clausola al margine:** A3/A1 a σ=0 = 1.087 con soglia 1.10 — conferma con margine sottile
    (0.0349 vs limite 0.0353). Il costo di calibrazione di A3 sulle classi reali è più alto che in M0.
@@ -65,6 +81,13 @@ Riportato, non corretto.
   e le osservazioni esplorative etichettate.
 - Il costo per M0-vs-M1 del valore σ* non è confrontabile in assoluto (ambienti diversi): confrontata solo
   la struttura.
+
+## Known limitations (voce registrata per la M3 — integrazione Gate 1c)
+- **w-varianza su segnale autocorrelato:** la varianza EMA sottostima la varianza di un segnale
+  autocorrelato (qui AR(1) con ρ=0.9) → w3 sovraconfidente a σ intermedi (0.81 vs teoria 0.72 a σ=0.5).
+  Nei costi non è emerso danno, ma lo stimatore w-varianza di `symbiont-gauge` dovrà dichiarare questo
+  limite nel README §Known limitations e/o stimare la varianza su finestre più lunghe della scala di
+  autocorrelazione.
 
 ## Artefatti
 `experiments/degradation_sam/`: `prereg_M1.md` (23eb698) · `harness_m1.py` (791e626) · `results_raw.csv`
